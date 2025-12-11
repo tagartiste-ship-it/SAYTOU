@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Déconnexion forcée</title>
+</head>
+<body>
+    <h1>Déconnexion en cours...</h1>
+    <script>
+        // Nettoyer tout le localStorage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Rediriger vers la page de connexion
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 500);
+    </script>
+</body>
+</html>

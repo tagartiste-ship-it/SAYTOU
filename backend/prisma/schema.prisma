@@ -1,0 +1,166 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  LOCALITE
+  SOUS_LOCALITE_ADMIN
+  SECTION_USER
+}
+
+enum ScopeType {
+  LOCALITE
+  SOUS_LOCALITE
+  SECTION
+}
+
+model User {
+  id                String          @id @default(uuid())
+  email             String          @unique
+  passwordHash      String          @map("password_hash")
+  role              UserRole
+  name              String
+  sousLocaliteId    String?         @map("sous_localite_id")
+  sectionId         String?         @map("section_id")
+  refreshToken      String?         @map("refresh_token")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  
+  sousLocalite      SousLocalite?   @relation(fields: [sousLocaliteId], references: [id], onDelete: SetNull)
+  section           Section?        @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  
+  createdSousLocalites  SousLocalite[]    @relation("CreatedBy")
+  createdSections       Section[]         @relation("CreatedBy")
+  createdTypes          RencontreType[]   @relation("TypeCreatedBy")
+  createdRencontres     Rencontre[]       @relation("CreatedBy")
+  updatedRencontres     Rencontre[]       @relation("UpdatedBy")
+
+  @@map("users")
+}
+
+model Localite {
+  id              String          @id @default(uuid())
+  name            String          @unique
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  
+  sousLocalites   SousLocalite[]
+
+  @@map("localites")
+}
+
+model SousLocalite {
+  id          String    @id @default(uuid())
+  name        String
+  localiteId  String    @map("localite_id")
+  createdById String    @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  localite    Localite  @relation(fields: [localiteId], references: [id], onDelete: Cascade)
+  createdBy   User      @relation("CreatedBy", fields: [createdById], references: [id])
+  sections    Section[]
+  users       User[]
+
+  @@map("sous_localites")
+}
+
+model Section {
+  id              String        @id @default(uuid())
+  name            String
+  sousLocaliteId  String        @map("sous_localite_id")
+  createdById     String        @map("created_by")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  
+  sousLocalite    SousLocalite  @relation(fields: [sousLocaliteId], references: [id], onDelete: Cascade)
+  createdBy       User          @relation("CreatedBy", fields: [createdById], references: [id])
+  rencontres      Rencontre[]
+  users           User[]
+  membres         Membre[]
+
+  @@map("sections")
+}
+
+model Membre {
+  id              String    @id @default(uuid())
+  sectionId       String    @map("section_id")
+  photo           String?
+  prenom          String
+  nom             String
+  genre           String?
+  fonction        String?
+  corpsMetier     String?   @map("corps_metier")
+  groupeSanguin   String?   @map("groupe_sanguin")
+  telephone       String?
+  numeroCNI       String?   @map("numero_cni")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  section         Section   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@map("membres")
+}
+
+model RencontreType {
+  id          String      @id @default(uuid())
+  name        String      @unique
+  isReunion   Boolean     @default(false) @map("is_reunion")
+  createdById String?     @map("created_by")
+  scopeType   ScopeType?  @map("scope_type")
+  scopeId     String?     @map("scope_id")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  
+  createdBy   User?       @relation("TypeCreatedBy", fields: [createdById], references: [id])
+  rencontres  Rencontre[]
+
+  @@index([scopeType, scopeId])
+  @@map("rencontre_types")
+}
+
+model Rencontre {
+  id              String        @id @default(uuid())
+  typeId          String        @map("type_id")
+  sectionId       String        @map("section_id")
+  scopeType       ScopeType     @map("scope_type")
+  scopeId         String        @map("scope_id")
+  date            DateTime      @db.Date
+  heureDebut      String        @map("heure_debut")
+  heureFin        String        @map("heure_fin")
+  moderateur      String
+  moniteur        String
+  theme           String?
+  ordreDuJour     Json?         @map("ordre_du_jour")
+  developpement   String?       @db.Text
+  pvReunion       String?       @map("pv_reunion") @db.Text
+  membresPresents Json?         @map("membres_presents")
+  presenceHomme   Int           @default(0) @map("presence_homme")
+  presenceFemme   Int           @default(0) @map("presence_femme")
+  presenceTotale  Int           @default(0) @map("presence_totale")
+  observations    String?       @db.Text
+  attachments     Json?
+  createdById     String        @map("created_by")
+  updatedById     String?       @map("updated_by")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  
+  type            RencontreType @relation(fields: [typeId], references: [id])
+  section         Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  createdBy       User          @relation("CreatedBy", fields: [createdById], references: [id])
+  updatedBy       User?         @relation("UpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([sectionId])
+  @@index([typeId])
+  @@index([date])
+  @@index([scopeType, scopeId])
+  @@map("rencontres")
+}
