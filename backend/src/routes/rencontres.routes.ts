@@ -1,8 +1,8 @@
-import { Router, Response } from 'express';
+import express, { Response } from 'express';
 import prisma from '../utils/prisma.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
-const router = Router();
+const router: any = express.Router();
 
 /**
  * @swagger
@@ -203,13 +203,13 @@ router.get(
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { userId, role } = req.user!;
-      const { typeId, sectionId, dateDebut, dateFin, page = '1', limit = '20' } = req.query;
+      const { typeId, sectionId, dateDebut, dateFin, q, page = '1', limit = '20' } = req.query;
 
       const pageNum = parseInt(page as string, 10);
       const limitNum = parseInt(limit as string, 10);
       const skip = (pageNum - 1) * limitNum;
 
-      // Construire le filtre
+      const whereClauses: any[] = [];
       const where: any = {};
 
       if (typeId) {
@@ -224,6 +224,17 @@ router.get(
         if (dateFin) {
           where.date.lte = new Date(dateFin as string);
         }
+      }
+
+      if (q && String(q).trim()) {
+        const query = String(q).trim();
+        whereClauses.push({
+          OR: [
+            { theme: { contains: query, mode: 'insensitive' } },
+            { moderateur: { contains: query, mode: 'insensitive' } },
+            { moniteur: { contains: query, mode: 'insensitive' } },
+          ],
+        });
       }
 
       // Filtrer selon le rôle et le scope
@@ -278,12 +289,16 @@ router.get(
         }
       }
 
+      if (Object.keys(where).length > 0) whereClauses.unshift(where);
+
+      const finalWhere = whereClauses.length > 1 ? { AND: whereClauses } : (whereClauses[0] || {});
+
       // Compter le total
-      const total = await prisma.rencontre.count({ where });
+      const total = await prisma.rencontre.count({ where: finalWhere });
 
       // Récupérer les rencontres
       const rencontres = await prisma.rencontre.findMany({
-        where,
+        where: finalWhere,
         include: {
           type: true,
           section: {

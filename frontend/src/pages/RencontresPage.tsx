@@ -27,9 +27,16 @@ export default function RencontresPage() {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
 
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
   useEffect(() => {
     fetchData();
-  }, [selectedType, selectedSection, dateDebut, dateFin]);
+  }, [selectedType, selectedSection, dateDebut, dateFin, debouncedSearch]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
+    return () => window.clearTimeout(t);
+  }, [searchTerm]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -39,6 +46,7 @@ export default function RencontresPage() {
       if (selectedSection) params.append('sectionId', selectedSection);
       if (dateDebut) params.append('dateDebut', dateDebut);
       if (dateFin) params.append('dateFin', dateFin);
+      if (debouncedSearch) params.append('q', debouncedSearch);
 
       const [rencontresRes, typesRes, sectionsRes] = await Promise.all([
         api.get<{ rencontres: Rencontre[] }>(`/rencontres?${params.toString()}`),
@@ -64,11 +72,7 @@ export default function RencontresPage() {
   };
 
 
-  const filteredRencontres = rencontres.filter((r) =>
-    r.theme?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.moderateur.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.moniteur.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredRencontres = rencontres;
 
   const containerVariants = {
     hidden: { opacity: 0 },

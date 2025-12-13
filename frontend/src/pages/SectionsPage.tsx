@@ -25,10 +25,69 @@ export default function SectionsPage() {
     userPassword: '',
     userName: ''
   });
+  const draftKey = `saytou:draft:sections:${user?.id ?? 'anon'}`;
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+    }
+  };
+
+  useEffect(() => {
+    if (hasRestoredDraft) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) {
+        setHasRestoredDraft(true);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as {
+        showModal?: boolean;
+        editingSectionId?: string | null;
+        formData?: typeof formData;
+      };
+
+      if (parsed?.formData) setFormData(parsed.formData);
+      if (parsed?.showModal) setShowModal(true);
+      if (parsed?.editingSectionId) setEditingSection({ id: parsed.editingSectionId } as Section);
+    } catch {
+    } finally {
+      setHasRestoredDraft(true);
+    }
+  }, [draftKey, hasRestoredDraft]);
+
+  useEffect(() => {
+    if (!hasRestoredDraft) return;
+    if (!showModal) return;
+    const timeout = window.setTimeout(() => {
+      try {
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            showModal,
+            editingSectionId: editingSection?.id ?? null,
+            formData,
+          })
+        );
+      } catch {
+      }
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [draftKey, formData, editingSection?.id, showModal, hasRestoredDraft]);
+
+  useEffect(() => {
+    if (!hasRestoredDraft) return;
+    if (!editingSection?.id) return;
+    const found = sections.find((s) => s.id === editingSection.id);
+    if (found) setEditingSection(found);
+  }, [sections, editingSection?.id, hasRestoredDraft]);
 
   const fetchData = async () => {
     try {
@@ -61,6 +120,7 @@ export default function SectionsPage() {
       setShowModal(false);
       setEditingSection(null);
       setFormData({ name: '', sousLocaliteId: '', userEmail: '', userPassword: '', userName: '' });
+      clearDraft();
       fetchData();
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Erreur');
@@ -228,7 +288,12 @@ export default function SectionsPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => setShowModal(false)}
+            onClick={() => {
+              setShowModal(false);
+              setEditingSection(null);
+              setFormData({ name: '', sousLocaliteId: '', userEmail: '', userPassword: '', userName: '' });
+              clearDraft();
+            }}
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -244,7 +309,12 @@ export default function SectionsPage() {
                 <motion.button
                   whileHover={{ rotate: 90, scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    setEditingSection(null);
+                    setFormData({ name: '', sousLocaliteId: '', userEmail: '', userPassword: '', userName: '' });
+                    clearDraft();
+                  }}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-600 dark:text-gray-400" />
@@ -328,7 +398,12 @@ export default function SectionsPage() {
                 )}
 
                 <div className="flex gap-2 justify-end pt-4">
-                  <Button type="button" onClick={() => setShowModal(false)} variant="outline">
+                  <Button type="button" onClick={() => {
+                    setShowModal(false);
+                    setEditingSection(null);
+                    setFormData({ name: '', sousLocaliteId: '', userEmail: '', userPassword: '', userName: '' });
+                    clearDraft();
+                  }} variant="outline">
                     Annuler
                   </Button>
                   <Button type="submit">

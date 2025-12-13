@@ -19,10 +19,69 @@ export default function TypesPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingType, setEditingType] = useState<RencontreType | null>(null);
   const [formData, setFormData] = useState({ name: '', isReunion: false });
+  const draftKey = `saytou:draft:types:${user?.id ?? 'anon'}`;
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
 
   useEffect(() => {
     fetchTypes();
   }, []);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+    }
+  };
+
+  useEffect(() => {
+    if (hasRestoredDraft) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) {
+        setHasRestoredDraft(true);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as {
+        showModal?: boolean;
+        editingTypeId?: string | null;
+        formData?: { name: string; isReunion: boolean };
+      };
+
+      if (parsed?.formData) setFormData(parsed.formData);
+      if (parsed?.showModal) setShowModal(true);
+      if (parsed?.editingTypeId) setEditingType({ id: parsed.editingTypeId } as RencontreType);
+    } catch {
+    } finally {
+      setHasRestoredDraft(true);
+    }
+  }, [draftKey, hasRestoredDraft]);
+
+  useEffect(() => {
+    if (!hasRestoredDraft) return;
+    if (!showModal) return;
+    const timeout = window.setTimeout(() => {
+      try {
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            showModal,
+            editingTypeId: editingType?.id ?? null,
+            formData,
+          })
+        );
+      } catch {
+      }
+    }, 500);
+    return () => window.clearTimeout(timeout);
+  }, [draftKey, formData, editingType?.id, showModal, hasRestoredDraft]);
+
+  useEffect(() => {
+    if (!hasRestoredDraft) return;
+    if (!editingType?.id) return;
+    const found = types.find((t) => t.id === editingType.id);
+    if (found) setEditingType(found);
+  }, [types, editingType?.id, hasRestoredDraft]);
 
   const fetchTypes = async () => {
     try {
@@ -53,6 +112,7 @@ export default function TypesPage() {
       setShowModal(false);
       setEditingType(null);
       setFormData({ name: '', isReunion: false });
+      clearDraft();
       fetchTypes();
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Erreur');
@@ -196,7 +256,12 @@ export default function TypesPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-            onClick={() => setShowModal(false)}
+            onClick={() => {
+              setShowModal(false);
+              setEditingType(null);
+              setFormData({ name: '', isReunion: false });
+              clearDraft();
+            }}
           >
             <motion.div 
               initial={{ scale: 0.9, y: 20 }}
@@ -212,7 +277,12 @@ export default function TypesPage() {
                 <motion.button
                   whileHover={{ scale: 1.1, rotate: 90 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    setEditingType(null);
+                    setFormData({ name: '', isReunion: false });
+                    clearDraft();
+                  }}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
@@ -240,7 +310,12 @@ export default function TypesPage() {
                   <label htmlFor="isReunion" className="text-sm text-gray-700 dark:text-gray-300">C'est une réunion</label>
                 </div>
                 <div className="flex gap-2 justify-end pt-2">
-                  <Button type="button" onClick={() => setShowModal(false)} variant="outline">
+                  <Button type="button" onClick={() => {
+                    setShowModal(false);
+                    setEditingType(null);
+                    setFormData({ name: '', isReunion: false });
+                    clearDraft();
+                  }} variant="outline">
                     Annuler
                   </Button>
                   <Button type="submit">

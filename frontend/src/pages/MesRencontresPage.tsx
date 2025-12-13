@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Edit, Trash2, FileText, Calendar, Users, Clock, Filter, Download } from 'lucide-react';
+import { Plus, Trash2, FileText, Calendar, Users, Clock, Filter, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
 import type { Rencontre } from '../lib/types';
@@ -19,6 +19,9 @@ export default function MesRencontresPage() {
   const [rencontres, setRencontres] = useState<Rencontre[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   
   // Filtres
   const [filters, setFilters] = useState({
@@ -29,7 +32,12 @@ export default function MesRencontresPage() {
 
   useEffect(() => {
     fetchRencontres();
-  }, [filters]);
+  }, [filters, debouncedSearch]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
+    return () => window.clearTimeout(t);
+  }, [searchTerm]);
 
   const fetchRencontres = async () => {
     try {
@@ -40,6 +48,7 @@ export default function MesRencontresPage() {
       if (filters.typeId) params.append('typeId', filters.typeId);
       if (filters.dateDebut) params.append('dateDebut', filters.dateDebut);
       if (filters.dateFin) params.append('dateFin', filters.dateFin);
+      if (debouncedSearch) params.append('q', debouncedSearch);
       params.append('limit', '100');
 
       const response = await api.get<{ rencontres: Rencontre[] }>(`/rencontres?${params.toString()}`);
@@ -183,6 +192,19 @@ export default function MesRencontresPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
+              <label className="label text-gray-700 dark:text-gray-300">Recherche</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
+                <Input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9"
+                  placeholder="Thème, modérateur, moniteur..."
+                />
+              </div>
+            </div>
+            <div>
               <label className="label text-gray-700 dark:text-gray-300">Date début</label>
               <Input
                 type="date"
@@ -198,15 +220,18 @@ export default function MesRencontresPage() {
                 onChange={(e) => setFilters({ ...filters, dateFin: e.target.value })}
               />
             </div>
-            <div className="flex items-end">
-              <Button
-                onClick={() => setFilters({ typeId: '', dateDebut: '', dateFin: '' })}
-                variant="outline"
-                className="w-full"
-              >
-                Réinitialiser
-              </Button>
-            </div>
+          </div>
+          <div className="mt-4">
+            <Button
+              onClick={() => {
+                setSearchTerm('');
+                setFilters({ typeId: '', dateDebut: '', dateFin: '' });
+              }}
+              variant="outline"
+              className="w-full"
+            >
+              Réinitialiser
+            </Button>
           </div>
         </Card>
       </motion.div>
@@ -306,15 +331,6 @@ export default function MesRencontresPage() {
                   </motion.button>
                   {canModify(rencontre) && (
                     <>
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => navigate(`/rencontres/${rencontre.id}/edit`)}
-                        className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
-                        title="Modifier"
-                      >
-                        <Edit className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                      </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}

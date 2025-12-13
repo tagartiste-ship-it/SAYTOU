@@ -9,6 +9,7 @@ interface RencontreData {
   moniteur: string;
   theme?: string | null;
   ordreDuJour?: any;
+  membresPresentsDetails?: Array<{ prenom: string; nom: string; fonction?: string | null; genre?: string | null }>;
   presenceHomme: number;
   presenceFemme: number;
   presenceTotale: number;
@@ -26,6 +27,15 @@ interface RencontreData {
   createdBy: {
     name: string;
   };
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 export async function generateRencontrePDF(rencontre: RencontreData, exportedBy: string): Promise<Buffer> {
@@ -248,13 +258,37 @@ function generateRencontreHTML(rencontre: RencontreData, exportedBy: string): st
     .page-break {
       page-break-after: always;
     }
+
+    .presents-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .present-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background-color: #fff;
+    }
+
+    .present-name {
+      font-weight: 600;
+    }
+
+    .present-meta {
+      font-size: 12px;
+      color: #555;
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="logo">SAYTOU</div>
     <div>Application de Gestion de Rencontres</div>
-    <div class="type-rencontre">${rencontre.type.name}</div>
+    <div class="type-rencontre">${escapeHtml(rencontre.type.name)}</div>
   </div>
 
   <div class="info-section">
@@ -272,19 +306,21 @@ function generateRencontreHTML(rencontre: RencontreData, exportedBy: string): st
     </div>
     <div class="info-row">
       <div class="info-label">Section :</div>
-      <div class="info-value">${rencontre.section.name}</div>
+      <div class="info-value">${escapeHtml(rencontre.section.name)}</div>
     </div>
     <div class="info-row">
       <div class="info-label">Modérateur :</div>
-      <div class="info-value">${rencontre.moderateur}</div>
+      <div class="info-value">${escapeHtml(rencontre.moderateur)}</div>
     </div>
     <div class="info-row">
       <div class="info-label">Moniteur :</div>
-      <div class="info-value">${rencontre.moniteur}</div>
+      <div class="info-value">${escapeHtml(rencontre.moniteur)}</div>
     </div>
   </div>
 
   ${rencontre.type.isReunion ? generateOrdreDuJourHTML(rencontre.ordreDuJour) : generateThemeHTML(rencontre.theme)}
+
+  ${generatePresentsHTML(rencontre.membresPresentsDetails)}
 
   <div class="section-title">Présences</div>
   <table>
@@ -312,17 +348,17 @@ function generateRencontreHTML(rencontre: RencontreData, exportedBy: string): st
 
   ${rencontre.observations ? `
     <div class="section-title">Observations</div>
-    <div class="observations">${rencontre.observations}</div>
+    <div class="observations">${escapeHtml(rencontre.observations)}</div>
   ` : ''}
 
   <div class="signatures">
     <div class="signature-box">
       <div class="signature-label">Modérateur</div>
-      <div class="signature-line">${rencontre.moderateur}</div>
+      <div class="signature-line">${escapeHtml(rencontre.moderateur)}</div>
     </div>
     <div class="signature-box">
       <div class="signature-label">Moniteur</div>
-      <div class="signature-line">${rencontre.moniteur}</div>
+      <div class="signature-line">${escapeHtml(rencontre.moniteur)}</div>
     </div>
     <div class="signature-box">
       <div class="signature-label">Responsable</div>
@@ -346,7 +382,35 @@ function generateThemeHTML(theme?: string | null): string {
   return `
     <div class="section-title">Thème</div>
     <div class="info-section">
-      <div style="font-size: 16px; font-weight: 500;">${theme}</div>
+      <div style="font-size: 16px; font-weight: 500;">${escapeHtml(theme)}</div>
+    </div>
+  `;
+}
+
+function generatePresentsHTML(
+  membres?: Array<{ prenom: string; nom: string; fonction?: string | null; genre?: string | null }>
+): string {
+  if (!membres || membres.length === 0) return '';
+
+  const cards = membres
+    .map((m) => {
+      const name = escapeHtml(`${m.prenom} ${m.nom}`.trim());
+      const metaParts = [m.fonction, m.genre].filter(Boolean) as string[];
+      const meta = metaParts.length ? escapeHtml(metaParts.join(' • ')) : '';
+
+      return `
+        <div class="present-card">
+          <div class="present-name">${name}</div>
+          ${meta ? `<div class="present-meta">${meta}</div>` : ''}
+        </div>
+      `;
+    })
+    .join('');
+
+  return `
+    <div class="section-title">Liste des présents</div>
+    <div class="presents-grid">
+      ${cards}
     </div>
   `;
 }
@@ -357,8 +421,8 @@ function generateOrdreDuJourHTML(ordreDuJour: any): string {
   const items = ordreDuJour.map((item: any, index: number) => `
     <div class="ordre-du-jour-item">
       <div class="ordre-numero">Point ${item.ordre || index + 1}</div>
-      <div class="ordre-titre">${item.titre || 'Sans titre'}</div>
-      ${item.description ? `<div class="ordre-description">${item.description}</div>` : ''}
+      <div class="ordre-titre">${escapeHtml(item.titre || 'Sans titre')}</div>
+      ${item.description ? `<div class="ordre-description">${escapeHtml(item.description)}</div>` : ''}
     </div>
   `).join('');
 

@@ -75,8 +75,29 @@ router.get(
         select: { name: true },
       });
 
+      let membresPresentsDetails: Array<{ prenom: string; nom: string; fonction?: string | null; genre?: string | null }> = [];
+      const membresPresentsIds = Array.isArray((rencontre as any).membresPresents) ? ((rencontre as any).membresPresents as string[]) : [];
+      if (membresPresentsIds.length > 0) {
+        membresPresentsDetails = await prisma.membre.findMany({
+          where: {
+            id: { in: membresPresentsIds },
+            sectionId: rencontre.sectionId,
+          },
+          select: {
+            prenom: true,
+            nom: true,
+            fonction: true,
+            genre: true,
+          },
+          orderBy: [{ prenom: 'asc' }, { nom: 'asc' }],
+        });
+      }
+
       // Générer le PDF
-      const pdfBuffer = await generateRencontrePDF(rencontre, user?.name || 'Utilisateur');
+      const pdfBuffer = await generateRencontrePDF(
+        { ...(rencontre as any), membresPresentsDetails },
+        user?.name || 'Utilisateur'
+      );
 
       // Nom du fichier
       const dateStr = new Date(rencontre.date).toISOString().split('T')[0];

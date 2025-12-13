@@ -1,23 +1,25 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Trash2, Save, Users, Calendar, Clock, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Users, Calendar, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
 import type { RencontreType, Section, OrdreDuJourItem, Membre } from '../lib/types';
 import { useAuthStore } from '../store/authStore';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 
 export default function CreateRencontrePage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+
+  const draftKey = `saytou:draft:createRencontre:${user?.id ?? 'anon'}`;
   
   const [types, setTypes] = useState<RencontreType[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   
   // Form data
   const [formData, setFormData] = useState({
@@ -42,6 +44,133 @@ export default function CreateRencontrePage() {
 
   const [membres, setMembres] = useState<Membre[]>([]);
   const [membresPresents, setMembresPresents] = useState<string[]>([]);
+
+  const selectedType = types.find((t) => t.id === formData.typeId);
+  const isReunion = Boolean(selectedType?.isReunion);
+  const [hasUserEditedDeveloppement, setHasUserEditedDeveloppement] = useState(false);
+
+  const generateDeveloppementFromOrdreDuJour = () => {
+    const points = ordreDuJour
+      .map((item) => ({
+        ordre: item.ordre,
+        titre: item.titre?.trim() ?? '',
+        description: item.description?.trim() ?? '',
+      }))
+      .filter((p) => p.titre.length > 0);
+
+    if (points.length === 0) return '';
+
+    return points
+      .map((p) => {
+        const header = `${p.ordre}. ${p.titre} :`;
+        const body = p.description ? `\n   ${p.description}` : '';
+        return `${header}${body}`;
+      })
+      .join('\n\n');
+  };
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+    }
+  };
+
+  useEffect(() => {
+    if (hasRestoredDraft) return;
+
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) {
+        setHasRestoredDraft(true);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as {
+        version?: number;
+        savedAt?: string;
+        formData?: typeof formData;
+        ordreDuJour?: OrdreDuJourItem[];
+        membresPresents?: string[];
+      };
+
+      if (parsed?.formData) setFormData(parsed.formData);
+      if (Array.isArray(parsed?.ordreDuJour)) setOrdreDuJour(parsed.ordreDuJour);
+      if (Array.isArray(parsed?.membresPresents)) setMembresPresents(parsed.membresPresents);
+    } catch {
+    } finally {
+      setHasRestoredDraft(true);
+    }
+  }, [draftKey, hasRestoredDraft]);
+
+  useEffect(() => {
+    if (!hasRestoredDraft) return;
+
+    const timeout = window.setTimeout(() => {
+      try {
+        const payload = {
+          version: 1,
+          savedAt: new Date().toISOString(),
+          formData,
+          ordreDuJour,
+          membresPresents,
+        };
+        localStorage.setItem(draftKey, JSON.stringify(payload));
+      } catch {
+      }
+    }, 600);
+
+    return () => window.clearTimeout(timeout);
+  }, [draftKey, formData, ordreDuJour, membresPresents, hasRestoredDraft]);
+
+  useEffect(() => {
+    if (!membres.length) return;
+
+    const presents = new Set(membresPresents);
+    const presenceHomme = membres.filter((m) => presents.has(m.id) && m.genre === 'HOMME').length;
+    const presenceFemme = membres.filter((m) => presents.has(m.id) && m.genre === 'FEMME').length;
+
+    setFormData((prev) => {
+      if (prev.presenceHomme === presenceHomme && prev.presenceFemme === presenceFemme) return prev;
+      return { ...prev, presenceHomme, presenceFemme };
+    });
+  }, [membres, membresPresents]);
+
+  useEffect(() => {
+    if (!hasRestoredDraft) return;
+
+    if (isReunion) {
+      setFormData((prev) => {
+        if (!prev.moniteur && !prev.theme) return prev;
+        return { ...prev, moniteur: '', theme: '' };
+      });
+
+      setFormData((prev) => {
+        if (hasUserEditedDeveloppement) return prev;
+        if (prev.developpement?.trim()) return prev;
+        const generated = generateDeveloppementFromOrdreDuJour();
+        if (!generated) return prev;
+        return { ...prev, developpement: generated };
+      });
+    } else {
+      setFormData((prev) => {
+        if (!prev.pvReunion) return prev;
+        return { ...prev, pvReunion: '' };
+      });
+    }
+  }, [isReunion, hasRestoredDraft]);
+
+  useEffect(() => {
+    if (!hasRestoredDraft) return;
+    if (!isReunion) return;
+    if (hasUserEditedDeveloppement) return;
+
+    const generated = generateDeveloppementFromOrdreDuJour();
+    setFormData((prev) => {
+      if (prev.developpement === generated) return prev;
+      return { ...prev, developpement: generated };
+    });
+  }, [ordreDuJour, isReunion, hasRestoredDraft, hasUserEditedDeveloppement]);
 
   useEffect(() => {
     console.log('👤 User info:', user);
@@ -124,19 +253,29 @@ export default function CreateRencontrePage() {
       return;
     }
 
+    if (!isReunion && formData.theme.trim() && !formData.developpement.trim()) {
+      toast.error('Veuillez renseigner le DÉVELOPPEMENT du thème');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const payload = {
         ...formData,
+        moniteur: isReunion ? '' : formData.moniteur,
+        theme: isReunion ? '' : formData.theme,
+        developpement: formData.developpement,
+        pvReunion: isReunion ? formData.pvReunion : '',
         presenceHomme: Number(formData.presenceHomme),
         presenceFemme: Number(formData.presenceFemme),
         presenceTotale: Number(formData.presenceHomme) + Number(formData.presenceFemme),
-        ordreDuJour: ordreDuJour.filter(item => item.titre.trim() !== ''),
+        ordreDuJour: isReunion ? ordreDuJour.filter(item => item.titre.trim() !== '') : [],
         membresPresents,
       };
 
       await api.post('/rencontres', payload);
       toast.success('Rencontre créée avec succès');
+      clearDraft();
       navigate('/rencontres');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Erreur lors de la création');
@@ -180,7 +319,17 @@ export default function CreateRencontrePage() {
         </div>
       </motion.div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-6"
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter') return;
+          const target = e.target as HTMLElement | null;
+          const tagName = target?.tagName?.toUpperCase();
+          if (tagName === 'TEXTAREA') return;
+          e.preventDefault();
+        }}
+      >
         {/* Informations générales */}
         <motion.div variants={itemVariants}>
           <Card className="p-6 space-y-4">
@@ -269,98 +418,134 @@ export default function CreateRencontrePage() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Moniteur</label>
-              <input
-                type="text"
-                value={formData.moniteur}
-                onChange={(e) => setFormData({ ...formData, moniteur: e.target.value })}
-                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
-                placeholder="Nom du moniteur"
-              />
-            </div>
-          </div>
+            {!isReunion && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Moniteur</label>
+                <input
+                  type="text"
+                  value={formData.moniteur}
+                  onChange={(e) => setFormData({ ...formData, moniteur: e.target.value })}
+                  className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                  placeholder="Nom du moniteur"
+                />
+              </div>
+            )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Thème</label>
-            <input
-              type="text"
-              value={formData.theme}
-              onChange={(e) => setFormData({ ...formData, theme: e.target.value })}
-              className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
-              placeholder="Thème de la rencontre"
-            />
+            {!isReunion && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Thème</label>
+                <input
+                  type="text"
+                  value={formData.theme}
+                  onChange={(e) => setFormData({ ...formData, theme: e.target.value })}
+                  className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                  placeholder="Thème de la rencontre"
+                />
+              </div>
+            )}
           </div>
           </Card>
         </motion.div>
 
-        {/* Ordre du jour */}
-        <motion.div variants={itemVariants}>
-          <Card className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary-600" />
-                Ordre du jour
-              </h2>
-              <Button
-                type="button"
-                onClick={handleAddOrdre}
-                variant="outline"
-                className="inline-flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                Ajouter un point
-              </Button>
-            </div>
-
-          <AnimatePresence mode="popLayout">
-            {ordreDuJour.map((item, index) => (
-              <motion.div 
-                key={index}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="flex gap-3 items-start"
-              >
-                <div className="flex-shrink-0 w-8 h-10 flex items-center justify-center bg-primary-100 dark:bg-primary-900/30 rounded font-medium text-primary-700 dark:text-primary-400">
-                  {item.ordre}
-                </div>
-                <div className="flex-1 space-y-2">
-                  <input
-                    type="text"
-                    value={item.titre}
-                    onChange={(e) => handleOrdreChange(index, 'titre', e.target.value)}
-                    className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
-                    placeholder="Titre du point"
-                  />
-                  <textarea
-                    value={item.description || ''}
-                    onChange={(e) => handleOrdreChange(index, 'description', e.target.value)}
-                    className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
-                    rows={2}
-                    placeholder="Description (optionnel)"
-                  />
-                </div>
-                {ordreDuJour.length > 1 && (
-                  <motion.button
+        {/* Ordre du jour (réunion uniquement) */}
+        <AnimatePresence>
+          {isReunion && (
+            <motion.div variants={itemVariants}>
+              <Card className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-primary-600" />
+                    Ordre du jour
+                  </h2>
+                  <Button
                     type="button"
-                    onClick={() => handleRemoveOrdre(index)}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                    onClick={handleAddOrdre}
+                    variant="outline"
+                    className="inline-flex items-center gap-2"
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </motion.button>
-                )}
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          </Card>
-        </motion.div>
+                    <Plus className="w-4 h-4" />
+                    Ajouter un point
+                  </Button>
+                </div>
+
+              <AnimatePresence mode="popLayout">
+                {ordreDuJour.map((item, index) => (
+                  <motion.div 
+                    key={index}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    className="flex gap-3 items-start"
+                  >
+                    <div className="flex-shrink-0 w-8 h-10 flex items-center justify-center bg-primary-100 dark:bg-primary-900/30 rounded font-medium text-primary-700 dark:text-primary-400">
+                      {item.ordre}
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <input
+                        type="text"
+                        value={item.titre}
+                        onChange={(e) => handleOrdreChange(index, 'titre', e.target.value)}
+                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                        placeholder="Titre du point"
+                      />
+                      <textarea
+                        value={item.description || ''}
+                        onChange={(e) => handleOrdreChange(index, 'description', e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-gray-900 dark:text-gray-100"
+                        rows={2}
+                        placeholder="DÉVELOPPEMENT DU POINT"
+                      />
+                    </div>
+                    {ordreDuJour.length > 1 && (
+                      <motion.button
+                        type="button"
+                        onClick={() => handleRemoveOrdre(index)}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </motion.button>
+                    )}
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Développement du thème (non réunion) */}
+        <AnimatePresence>
+          {!isReunion && formData.theme.trim() && (
+            <motion.div variants={itemVariants}>
+              <Card className="p-6 space-y-4">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-primary-600" />
+                  DÉVELOPPEMENT
+                </h2>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Développement du thème <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={formData.developpement}
+                    onChange={(e) => setFormData({ ...formData, developpement: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-gray-900 dark:text-gray-100"
+                    rows={6}
+                    placeholder="Décrivez le développement du thème..."
+                    required
+                  />
+                </div>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Espaces spécifiques aux réunions */}
         <AnimatePresence>
-          {types.find(t => t.id === formData.typeId)?.isReunion && (
+          {isReunion && (
             <motion.div 
               variants={itemVariants}
               initial={{ opacity: 0, height: 0 }}
@@ -374,11 +559,24 @@ export default function CreateRencontrePage() {
                 </h2>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Espace de développement</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Espace de développement
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHasUserEditedDeveloppement(false);
+                    const generated = generateDeveloppementFromOrdreDuJour();
+                    if (generated) setFormData((prev) => ({ ...prev, developpement: generated }));
+                  }}
+                  className="ml-2 text-xs text-primary-600 hover:text-primary-700 underline"
+                >
+                  Charger depuis l'ordre du jour
+                </button>
+              </label>
               <textarea
                 value={formData.developpement}
-                onChange={(e) => setFormData({ ...formData, developpement: e.target.value })}
-                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                readOnly
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
                 rows={6}
                 placeholder="Détaillez les points de développement abordés lors de la réunion..."
               />
@@ -398,7 +596,6 @@ Lieu : [Lieu de la réunion]
 
 PARTICIPANTS :
 - Modérateur : ${formData.moderateur || '[Nom du modérateur]'}
-- Moniteur : ${formData.moniteur || '[Nom du moniteur]'}
 - Présents : ${formData.presenceHomme + formData.presenceFemme} personnes (${formData.presenceHomme} H / ${formData.presenceFemme} F)
 
 ORDRE DU JOUR :
@@ -445,7 +642,7 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
               <textarea
                 value={formData.pvReunion}
                 onChange={(e) => setFormData({ ...formData, pvReunion: e.target.value })}
-                className="input font-mono text-sm"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 font-mono text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-gray-900 dark:text-gray-100"
                 rows={12}
                 placeholder="Cliquez sur 'Charger le modèle' pour obtenir un modèle de PV pré-rempli..."
               />
@@ -469,9 +666,9 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
               <input
                 type="number"
                 min="0"
+                disabled
                 value={formData.presenceHomme}
-                onChange={(e) => setFormData({ ...formData, presenceHomme: Number(e.target.value) })}
-                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2 text-sm dark:text-gray-100"
               />
             </div>
 
@@ -480,9 +677,9 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
               <input
                 type="number"
                 min="0"
+                disabled
                 value={formData.presenceFemme}
-                onChange={(e) => setFormData({ ...formData, presenceFemme: Number(e.target.value) })}
-                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2 text-sm dark:text-gray-100"
               />
             </div>
 
@@ -548,6 +745,15 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
                   </label>
                 ))}
               </div>
+              {membresPresents.length > 0 && (
+                <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                  Présents :{' '}
+                  {membres
+                    .filter((m) => membresPresents.includes(m.id))
+                    .map((m) => `${m.prenom} ${m.nom}`)
+                    .join(', ')}
+                </div>
+              )}
               <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                 <p className="text-sm text-blue-900 dark:text-blue-100">
                   <strong>{membresPresents.length}</strong> membre{membresPresents.length > 1 ? 's' : ''} présent{membresPresents.length > 1 ? 's' : ''} sur <strong>{membres.length}</strong>
@@ -571,7 +777,7 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
           <textarea
             value={formData.observations}
             onChange={(e) => setFormData({ ...formData, observations: e.target.value })}
-            className="input"
+            className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-gray-900 dark:text-gray-100"
             rows={4}
             placeholder="Observations ou remarques..."
           />
@@ -582,7 +788,10 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
         <motion.div variants={itemVariants} className="flex items-center justify-end gap-4">
           <Button
             type="button"
-            onClick={() => navigate('/rencontres')}
+            onClick={() => {
+              clearDraft();
+              navigate('/rencontres');
+            }}
             variant="outline"
             disabled={isLoading}
           >

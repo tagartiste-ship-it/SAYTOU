@@ -52,3 +52,6 @@ backend/temp/
 .cache/
 .temp/
 tmp/
+
+# Local Netlify folder
+.netlify

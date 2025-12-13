@@ -15,6 +15,8 @@ export default function MembresPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const draftKey = 'saytou:draft:membres';
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   
   const [formData, setFormData] = useState({
     photo: '',
@@ -31,6 +33,58 @@ export default function MembresPage() {
   useEffect(() => {
     fetchMembres();
   }, []);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {
+    }
+  };
+
+  useEffect(() => {
+    if (hasRestoredDraft) return;
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) {
+        setHasRestoredDraft(true);
+        return;
+      }
+
+      const parsed = JSON.parse(raw) as {
+        isAdding?: boolean;
+        editingId?: string | null;
+        formData?: typeof formData;
+      };
+
+      if (parsed?.formData) setFormData(parsed.formData);
+      if (parsed?.isAdding) setIsAdding(true);
+      if (parsed?.editingId) setEditingId(parsed.editingId);
+    } catch {
+    } finally {
+      setHasRestoredDraft(true);
+    }
+  }, [draftKey, hasRestoredDraft]);
+
+  useEffect(() => {
+    if (!hasRestoredDraft) return;
+    if (!isAdding && !editingId) return;
+
+    const timeout = window.setTimeout(() => {
+      try {
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({
+            isAdding,
+            editingId,
+            formData,
+          })
+        );
+      } catch {
+      }
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [draftKey, formData, isAdding, editingId, hasRestoredDraft]);
 
   const fetchMembres = async () => {
     try {
@@ -84,6 +138,7 @@ export default function MembresPage() {
   const handleCancel = () => {
     setIsAdding(false);
     setEditingId(null);
+    clearDraft();
     setFormData({
       photo: '',
       prenom: '',
@@ -113,6 +168,7 @@ export default function MembresPage() {
       }
       
       handleCancel();
+      clearDraft();
       fetchMembres();
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Erreur lors de l\'enregistrement');

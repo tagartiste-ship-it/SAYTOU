@@ -10,7 +10,6 @@ import RencontresPage from './pages/RencontresPage';
 import MesRencontresPage from './pages/MesRencontresPage';
 import RencontreDetailPage from './pages/RencontreDetailPage';
 import CreateRencontrePage from './pages/CreateRencontrePage';
-import EditRencontrePage from './pages/EditRencontrePage';
 import MembresPage from './pages/MembresPage';
 import SousLocalitesPage from './pages/SousLocalitesPage';
 import SectionsPage from './pages/SectionsPage';
@@ -49,7 +48,6 @@ function App() {
           <Route path="mes-rencontres" element={<MesRencontresPage />} />
           <Route path="rencontres" element={<RencontresPage />} />
           <Route path="rencontres/new" element={<CreateRencontrePage />} />
-          <Route path="rencontres/:id/edit" element={<EditRencontrePage />} />
           <Route path="rencontres/:id" element={<RencontreDetailPage />} />
           <Route path="membres" element={<MembresPage />} />
           <Route path="sous-localites" element={<SousLocalitesPage />} />
