@@ -1,17 +1,16 @@
-FROM node:18-alpine
+FROM node:18-bullseye-slim
 
-# Install dependencies for Puppeteer
-RUN apk add --no-cache \
+# Install dependencies for Puppeteer + Prisma (OpenSSL)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
-    nss \
-    freetype \
-    harfbuzz \
     ca-certificates \
-    ttf-freefont
+    openssl \
+    fonts-freefont-ttf \
+  && rm -rf /var/lib/apt/lists/*
 
 # Tell Puppeteer to skip installing Chrome. We'll be using the installed package.
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
