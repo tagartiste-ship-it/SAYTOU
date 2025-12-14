@@ -18,7 +18,7 @@
     "noImplicitAny": false
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/types/global.d.ts"],
+  "exclude": ["node_modules", "dist", "src/types/global.d.ts", "src/prisma/seed.ts"],
   "ts-node": {
     "esm": true,
     "experimentalSpecifierResolution": "node"
