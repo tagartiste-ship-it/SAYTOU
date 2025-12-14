@@ -1,4 +1,4 @@
-import multer from 'multer';
+import multer, { type FileFilterCallback } from 'multer';
 import path from 'path';
 import { config } from '../config/index.js';
 import { Request } from 'express';
@@ -16,7 +16,7 @@ const storage = multer.diskStorage({
 const fileFilter = (
   req: Request,
   file: Express.Multer.File,
-  cb: multer.FileFilterCallback
+  cb: FileFilterCallback
 ) => {
   if (config.upload.allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
