@@ -1,8 +1,7 @@
 [build]
-  base = "frontend"
-  command = "npm install --include=dev && npm run build"
-  publish = "dist"
+  command = "npm --prefix frontend ci --include=dev && npm --prefix frontend run build"
+  publish = "frontend/dist"
 
 [build.environment]
   NODE_VERSION = "18"
-  NPM_FLAGS = "--include=dev"
+
