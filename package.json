@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Application de gestion de rencontres religieuses et communautaires",
   "private": true,
+  "dependencies": {
+    "patch-package": "^8.0.1"
+  },
   "workspaces": [
     "backend",
     "frontend"
