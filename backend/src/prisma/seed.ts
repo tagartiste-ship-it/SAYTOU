@@ -44,6 +44,17 @@ async function main() {
   });
   console.log('✅ Compte LOCALITÉ créé');
 
+  // Créer une localité exemple
+  console.log('🏛️ Création de localité exemple...');
+  const localite = await prisma.localite.upsert({
+    where: { name: 'Localité Exemple' },
+    update: {},
+    create: {
+      name: 'Localité Exemple',
+    },
+  });
+  console.log('✅ Localité créée');
+
   // Créer une sous-localité exemple
   console.log('🏢 Création de sous-localité exemple...');
   const sousLocalite = await prisma.sousLocalite.upsert({
@@ -52,6 +63,7 @@ async function main() {
     create: {
       id: 'sl-example-1',
       name: 'Sous-Localité Exemple',
+      localiteId: localite.id,
       createdById: localiteUser.id,
     },
   });
