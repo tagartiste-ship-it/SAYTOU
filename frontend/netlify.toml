@@ -1,5 +1,5 @@
 [build]
-  command = "npm --prefix frontend ci --include=dev && npm --prefix frontend run build"
+  command = "npm --prefix frontend install --include=dev && npm --prefix frontend run build"
   publish = "frontend/dist"
 
 [[redirects]]
