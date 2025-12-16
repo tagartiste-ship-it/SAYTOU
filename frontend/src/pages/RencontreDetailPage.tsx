@@ -41,8 +41,28 @@ export default function RencontreDetailPage() {
     }
   };
 
-  const handleDownloadPDF = () => {
-    window.open(`${api.defaults.baseURL}/rencontres/${id}/pdf`, '_blank');
+  const handleDownloadPDF = async () => {
+    try {
+      if (!id) return;
+
+      const response = await api.get(`/rencontres/${id}/pdf`, {
+        responseType: 'blob',
+      });
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `rencontre_${id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Erreur téléchargement PDF:', error);
+      toast.error(error.response?.data?.error || 'Erreur lors du téléchargement du PDF');
+    }
   };
 
   const containerVariants = {

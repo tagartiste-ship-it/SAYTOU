@@ -41,9 +41,68 @@ const router = Router();
  *       201:
  *         description: Compte créé avec succès
  */
-router.post('/signup', async (req: Request, res: Response): Promise<void> => {
+router.post('/signup', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { email, password, name, role, sousLocaliteId, sectionId } = req.body;
+
+    const creator = req.user;
+    if (!creator) {
+      res.status(401).json({ error: 'Non authentifié' });
+      return;
+    }
+
+    // Règles de création :
+    // - LOCALITE peut créer uniquement SOUS_LOCALITE_ADMIN (dans sa sous-localité)
+    // - SOUS_LOCALITE_ADMIN peut créer uniquement SECTION_USER (dans ses sections)
+    if (creator.role === 'LOCALITE') {
+      if (role !== 'SOUS_LOCALITE_ADMIN') {
+        res.status(403).json({ error: 'Accès non autorisé' });
+        return;
+      }
+
+      if (!sousLocaliteId) {
+        res.status(400).json({ error: 'sousLocaliteId requis pour créer un compte SOUS_LOCALITE_ADMIN' });
+        return;
+      }
+
+      if (sectionId) {
+        res.status(400).json({ error: 'sectionId non autorisé pour un compte SOUS_LOCALITE_ADMIN' });
+        return;
+      }
+    } else if (creator.role === 'SOUS_LOCALITE_ADMIN') {
+      if (role !== 'SECTION_USER') {
+        res.status(403).json({ error: 'Accès non autorisé' });
+        return;
+      }
+
+      if (!sectionId) {
+        res.status(400).json({ error: 'sectionId requis pour créer un compte SECTION_USER' });
+        return;
+      }
+
+      const creatorUser = await prisma.user.findUnique({
+        where: { id: creator.userId },
+        select: { sousLocaliteId: true },
+      });
+
+      if (!creatorUser?.sousLocaliteId) {
+        res.status(403).json({ error: 'Accès non autorisé' });
+        return;
+      }
+
+      const section = await prisma.section.findUnique({
+        where: { id: sectionId },
+        select: { sousLocaliteId: true },
+      });
+
+      if (!section || section.sousLocaliteId !== creatorUser.sousLocaliteId) {
+        res.status(403).json({ error: 'Accès non autorisé' });
+        return;
+      }
+    } else {
+      res.status(403).json({ error: 'Accès non autorisé' });
+      return;
+    }
 
     // Vérifier si l'utilisateur existe déjà
     const existingUser = await prisma.user.findUnique({ where: { email } });

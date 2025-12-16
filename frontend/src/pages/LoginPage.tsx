@@ -15,6 +15,8 @@ export default function LoginPage() {
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
 
+  const showTestAccounts = import.meta.env.VITE_SHOW_TEST_ACCOUNTS === 'true';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -140,28 +142,30 @@ export default function LoginPage() {
             </motion.div>
           </form>
 
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            className="mt-6 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-4 text-sm border border-gray-200 dark:border-gray-700"
-          >
-            <p className="font-medium text-gray-900 dark:text-gray-100 mb-2">🔑 Comptes de test:</p>
-            <ul className="space-y-1.5 text-gray-600 dark:text-gray-400">
-              <li className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-primary"></span>
-                <code className="text-xs">localite@saytou.test / ChangeMe123!</code>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-accent"></span>
-                <code className="text-xs">admin@saytou.test / Admin123!</code>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                <code className="text-xs">user@saytou.test / User123!</code>
-              </li>
-            </ul>
-          </motion.div>
+          {showTestAccounts && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.6 }}
+              className="mt-6 rounded-lg bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-4 text-sm border border-gray-200 dark:border-gray-700"
+            >
+              <p className="font-medium text-gray-900 dark:text-gray-100 mb-2">🔑 Comptes de test:</p>
+              <ul className="space-y-1.5 text-gray-600 dark:text-gray-400">
+                <li className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-primary"></span>
+                  <code className="text-xs">localite@saytou.test / ChangeMe123!</code>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-accent"></span>
+                  <code className="text-xs">admin@saytou.test / Admin123!</code>
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                  <code className="text-xs">user@saytou.test / User123!</code>
+                </li>
+              </ul>
+            </motion.div>
+          )}
         </Card>
       </motion.div>
     </div>

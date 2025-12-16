@@ -74,6 +74,28 @@ export default function RencontresPage() {
 
   const filteredRencontres = rencontres;
 
+  const handleDownloadPDF = async (rencontreId: string) => {
+    try {
+      const response = await api.get(`/rencontres/${rencontreId}/pdf`, {
+        responseType: 'blob',
+      });
+
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `rencontre_${rencontreId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Erreur téléchargement PDF:', error);
+      toast.error(error.response?.data?.error || 'Erreur lors du téléchargement du PDF');
+    }
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -287,7 +309,7 @@ export default function RencontresPage() {
                         whileTap={{ scale: 0.95 }}
                         onClick={(e) => {
                           e.preventDefault();
-                          window.open(`${api.defaults.baseURL}/rencontres/${rencontre.id}/pdf`, '_blank');
+                          handleDownloadPDF(rencontre.id);
                         }}
                         className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                         title="Télécharger PDF"
