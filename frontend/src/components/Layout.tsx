@@ -239,6 +239,28 @@ export default function Layout() {
                   </Link>
                 ))}
               </nav>
+
+              <div className="border-t border-gray-200 dark:border-gray-800 p-4">
+                <div className="mb-3 rounded-lg bg-gray-50 dark:bg-gray-800 p-3">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
+                  <p className="mt-1 text-xs font-medium text-primary dark:text-primary-400">
+                    {user?.role === 'LOCALITE' && 'Super Admin'}
+                    {user?.role === 'SOUS_LOCALITE_ADMIN' && 'Admin Sous-Localité'}
+                    {user?.role === 'SECTION_USER' && 'Utilisateur Section'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSidebarOpen(false);
+                    void handleLogout();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" />
+                  Déconnexion
+                </button>
+              </div>
               </div>
             </motion.div>
           </div>
