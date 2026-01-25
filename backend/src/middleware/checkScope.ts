@@ -162,19 +162,3 @@ export async function canModifyRencontre(
 
   return false;
 }
-
-// Étendre le type AuthRequest pour inclure le scope
-declare module './auth.js' {
-  interface AuthRequest {
-    scope?: {
-      scopeType: 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION';
-      scopeId: string;
-      user: {
-        id: string;
-        role: string;
-        sectionId: string | null;
-        sousLocaliteId: string | null;
-      };
-    };
-  }
-}

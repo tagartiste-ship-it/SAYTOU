@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/jwt.js';
 
-export type AuthRequest = Request & {
+export interface AuthRequest extends Request {
   user?: {
     userId: string;
     email: string;
@@ -9,7 +9,17 @@ export type AuthRequest = Request & {
     sectionId?: string | null;
     sousLocaliteId?: string | null;
   };
-};
+  scope?: {
+    scopeType: 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION';
+    scopeId: string;
+    user: {
+      id: string;
+      role: string;
+      sectionId: string | null;
+      sousLocaliteId: string | null;
+    };
+  };
+}
 
 export const authenticate = (
   req: AuthRequest,
