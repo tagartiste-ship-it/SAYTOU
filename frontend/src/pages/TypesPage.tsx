@@ -137,6 +137,7 @@ export default function TypesPage() {
   const handleEdit = (type: RencontreType) => {
     setEditingType(type);
     setFormData({ name: type.name, isReunion: type.isReunion, trancheAgeId: type.trancheAgeId ?? '' });
+    if (tranchesAge.length === 0) fetchTranchesAge();
     setShowModal(true);
   };
 
@@ -204,7 +205,15 @@ export default function TypesPage() {
           <p className="text-gray-600 dark:text-gray-400 mt-1">Gérez les types de rencontres</p>
         </div>
         {canManage && (
-          <Button onClick={() => { setShowModal(true); setEditingType(null); setFormData({ name: '', isReunion: false, trancheAgeId: '' }); }} className="inline-flex items-center gap-2">
+          <Button
+            onClick={() => {
+              if (tranchesAge.length === 0) fetchTranchesAge();
+              setShowModal(true);
+              setEditingType(null);
+              setFormData({ name: '', isReunion: false, trancheAgeId: '' });
+            }}
+            className="inline-flex items-center gap-2"
+          >
             <Plus className="w-5 h-5" />
             Nouveau type
           </Button>

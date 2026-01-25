@@ -1,8 +1,49 @@
 import { Router, Response } from 'express';
 import prisma from '../utils/prisma.js';
-import { authenticate, authorize, AuthRequest } from '../middleware/auth.js';
+import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
+
+type ScopeType = 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION' | null;
+
+const normalizeTypeName = (value: unknown) => String(value ?? '').trim();
+
+const getRequestScope = async (req: AuthRequest): Promise<{ role: string; scopeType: ScopeType; scopeId: string | null; userId: string }> => {
+  const { userId, role } = req.user!;
+
+  if (role === 'SECTION_USER') {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { sectionId: true } });
+    return { role, scopeType: 'SECTION', scopeId: user?.sectionId ?? null, userId };
+  }
+
+  if (role === 'SOUS_LOCALITE_ADMIN') {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { sousLocaliteId: true } });
+    return { role, scopeType: 'SOUS_LOCALITE', scopeId: user?.sousLocaliteId ?? null, userId };
+  }
+
+  return { role, scopeType: null, scopeId: null, userId };
+};
+
+const canManageType = async (req: AuthRequest, type: { scopeType: ScopeType; scopeId: string | null }) => {
+  const { role, scopeId } = await getRequestScope(req);
+
+  if (role === 'LOCALITE') return true;
+
+  if (role === 'SOUS_LOCALITE_ADMIN') {
+    if (type.scopeType === 'SOUS_LOCALITE' && type.scopeId === scopeId) return true;
+    if (type.scopeType === 'SECTION' && type.scopeId) {
+      const section = await prisma.section.findUnique({ where: { id: type.scopeId }, select: { sousLocaliteId: true } });
+      return section?.sousLocaliteId === scopeId;
+    }
+    return false;
+  }
+
+  if (role === 'SECTION_USER') {
+    return type.scopeType === 'SECTION' && !!type.scopeId && type.scopeId === scopeId;
+  }
+
+  return false;
+};
 
 /**
  * @swagger
@@ -87,10 +128,11 @@ router.post(
   authenticate,
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const { name, isReunion, trancheAgeId } = req.body;
+      const { isReunion, trancheAgeId } = req.body;
+      const name = normalizeTypeName(req.body?.name);
       const { userId, role } = req.user!;
 
-      if (!name || name.trim() === '') {
+      if (!name) {
         res.status(400).json({ error: 'Le nom est requis' });
         return;
       }
@@ -131,6 +173,20 @@ router.post(
         scopeId = null;
       }
 
+      const existing = await prisma.rencontreType.findFirst({
+        where: {
+          name: { equals: name, mode: 'insensitive' },
+          scopeType,
+          scopeId,
+        },
+        select: { id: true },
+      });
+
+      if (existing) {
+        res.status(400).json({ error: 'Un type avec ce nom existe déjà pour cette section' });
+        return;
+      }
+
       if (trancheAgeId) {
         const trancheAge = await prisma.trancheAge.findUnique({
           where: { id: String(trancheAgeId) },
@@ -145,7 +201,7 @@ router.post(
 
       const type = await prisma.rencontreType.create({
         data: {
-          name: name.trim(),
+          name,
           isReunion: isReunion || false,
           createdById: userId,
           scopeType,
@@ -180,14 +236,45 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  authorize('LOCALITE', 'SOUS_LOCALITE_ADMIN'),
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const { name, isReunion, trancheAgeId } = req.body;
+      const { isReunion, trancheAgeId } = req.body;
+      const name = normalizeTypeName(req.body?.name);
 
-      if (!name || name.trim() === '') {
+      if (!name) {
         res.status(400).json({ error: 'Le nom est requis' });
+        return;
+      }
+
+      const current = await prisma.rencontreType.findUnique({
+        where: { id },
+        select: { id: true, scopeType: true, scopeId: true },
+      });
+
+      if (!current) {
+        res.status(404).json({ error: 'Type introuvable' });
+        return;
+      }
+
+      const allowed = await canManageType(req, { scopeType: current.scopeType as ScopeType, scopeId: current.scopeId });
+      if (!allowed) {
+        res.status(403).json({ error: 'Accès refusé' });
+        return;
+      }
+
+      const duplicate = await prisma.rencontreType.findFirst({
+        where: {
+          id: { not: id },
+          name: { equals: name, mode: 'insensitive' },
+          scopeType: current.scopeType,
+          scopeId: current.scopeId,
+        },
+        select: { id: true },
+      });
+
+      if (duplicate) {
+        res.status(400).json({ error: 'Un type avec ce nom existe déjà pour cette section' });
         return;
       }
 
@@ -206,7 +293,7 @@ router.put(
       const type = await prisma.rencontreType.update({
         where: { id },
         data: {
-          name: name.trim(),
+          name,
           isReunion: isReunion !== undefined ? isReunion : undefined,
           trancheAgeId: trancheAgeId === undefined ? undefined : (trancheAgeId ? String(trancheAgeId) : null),
         },
@@ -238,10 +325,25 @@ router.put(
 router.delete(
   '/:id',
   authenticate,
-  authorize('LOCALITE'),
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
+
+      const current = await prisma.rencontreType.findUnique({
+        where: { id },
+        select: { id: true, scopeType: true, scopeId: true },
+      });
+
+      if (!current) {
+        res.status(404).json({ error: 'Type introuvable' });
+        return;
+      }
+
+      const allowed = await canManageType(req, { scopeType: current.scopeType as ScopeType, scopeId: current.scopeId });
+      if (!allowed) {
+        res.status(403).json({ error: 'Accès refusé' });
+        return;
+      }
 
       // Vérifier si le type est utilisé
       const rencontresCount = await prisma.rencontre.count({
