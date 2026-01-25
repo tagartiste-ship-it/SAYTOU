@@ -129,6 +129,7 @@ router.post('/signup', authenticate, async (req: AuthRequest, res: Response): Pr
         role,
         sousLocaliteId: sousLocaliteId || null,
         sectionId: sectionId || null,
+        mustChangePassword: true,
       },
       select: {
         id: true,
@@ -137,6 +138,7 @@ router.post('/signup', authenticate, async (req: AuthRequest, res: Response): Pr
         role: true,
         sousLocaliteId: true,
         sectionId: true,
+        mustChangePassword: true,
         createdAt: true,
       },
     });
@@ -179,6 +181,9 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password } = req.body;
 
+    const MAX_FAILED_ATTEMPTS = 5;
+    const LOCK_MINUTES = 15;
+
     // Trouver l'utilisateur
     const user = await prisma.user.findUnique({
       where: { email },
@@ -197,11 +202,42 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const lockedUntil = (user as any).lockedUntil as Date | null | undefined;
+    const failedLoginAttempts = ((user as any).failedLoginAttempts ?? 0) as number;
+
+    if (lockedUntil && lockedUntil.getTime() > Date.now()) {
+      res.status(423).json({
+        error: 'Compte temporairement bloqué. Réessayez plus tard ou contactez un administrateur.',
+        lockedUntil,
+      });
+      return;
+    }
+
     // Vérifier le mot de passe
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
+      const attempts = failedLoginAttempts + 1;
+      const shouldLock = attempts >= MAX_FAILED_ATTEMPTS;
+      const nextLockedUntil = shouldLock ? new Date(Date.now() + LOCK_MINUTES * 60 * 1000) : null;
+
+      await (prisma.user as any).update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: attempts,
+          lockedUntil: nextLockedUntil,
+        },
+      });
+
       res.status(401).json({ error: 'Email ou mot de passe incorrect' });
       return;
+    }
+
+    // Reset compteur/lock si succès
+    if (failedLoginAttempts !== 0 || lockedUntil) {
+      await (prisma.user as any).update({
+        where: { id: user.id },
+        data: { failedLoginAttempts: 0, lockedUntil: null },
+      });
     }
 
     // Générer les tokens
@@ -233,6 +269,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
         role: user.role,
         sousLocaliteId: user.sousLocaliteId,
         sectionId: user.sectionId,
+        mustChangePassword: (user as any).mustChangePassword ?? false,
         sousLocalite: user.sousLocalite,
         section: user.section,
       },
@@ -354,6 +391,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise
         role: true,
         sousLocaliteId: true,
         sectionId: true,
+        mustChangePassword: true,
         sousLocalite: {
           select: {
             id: true,
@@ -385,6 +423,52 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise
   } catch (error) {
     console.error('Erreur me:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des informations' });
+  }
+});
+
+router.post('/change-password', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: 'Champs manquants' });
+      return;
+    }
+
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      res.status(400).json({ error: 'Le mot de passe doit contenir au moins 8 caractères' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { id: true, passwordHash: true },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'Utilisateur non trouvé' });
+      return;
+    }
+
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok) {
+      res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await (prisma.user as any).update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        mustChangePassword: false,
+        refreshToken: null,
+      },
+    });
+
+    res.json({ message: 'Mot de passe modifié' });
+  } catch (error) {
+    console.error('Erreur change-password:', error);
+    res.status(500).json({ error: 'Erreur lors du changement de mot de passe' });
   }
 });
 

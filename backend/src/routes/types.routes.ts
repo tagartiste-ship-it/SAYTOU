@@ -59,6 +59,9 @@ router.get(
 
       const types = await prisma.rencontreType.findMany({
         where,
+        include: {
+          trancheAge: true,
+        },
         orderBy: { name: 'asc' },
       });
 
@@ -84,7 +87,7 @@ router.post(
   authenticate,
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-      const { name, isReunion } = req.body;
+      const { name, isReunion, trancheAgeId } = req.body;
       const { userId, role } = req.user!;
 
       if (!name || name.trim() === '') {
@@ -138,6 +141,18 @@ router.post(
         scopeId = null;
       }
 
+      if (trancheAgeId) {
+        const trancheAge = await prisma.trancheAge.findUnique({
+          where: { id: String(trancheAgeId) },
+          select: { id: true },
+        });
+
+        if (!trancheAge) {
+          res.status(400).json({ error: 'Tranche d\'âge invalide' });
+          return;
+        }
+      }
+
       const type = await prisma.rencontreType.create({
         data: {
           name: name.trim(),
@@ -145,6 +160,10 @@ router.post(
           createdById: userId,
           scopeType,
           scopeId,
+          trancheAgeId: trancheAgeId ? String(trancheAgeId) : null,
+        },
+        include: {
+          trancheAge: true,
         },
       });
 
@@ -175,11 +194,23 @@ router.put(
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { id } = req.params;
-      const { name, isReunion } = req.body;
+      const { name, isReunion, trancheAgeId } = req.body;
 
       if (!name || name.trim() === '') {
         res.status(400).json({ error: 'Le nom est requis' });
         return;
+      }
+
+      if (trancheAgeId) {
+        const trancheAge = await prisma.trancheAge.findUnique({
+          where: { id: String(trancheAgeId) },
+          select: { id: true },
+        });
+
+        if (!trancheAge) {
+          res.status(400).json({ error: 'Tranche d\'âge invalide' });
+          return;
+        }
       }
 
       const type = await prisma.rencontreType.update({
@@ -187,6 +218,10 @@ router.put(
         data: {
           name: name.trim(),
           isReunion: isReunion !== undefined ? isReunion : undefined,
+          trancheAgeId: trancheAgeId === undefined ? undefined : (trancheAgeId ? String(trancheAgeId) : null),
+        },
+        include: {
+          trancheAge: true,
         },
       });
 

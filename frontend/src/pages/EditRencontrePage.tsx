@@ -15,6 +15,30 @@ export default function EditRencontrePage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuthStore();
+
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      const message = event.error?.message || event.message || 'Erreur inconnue';
+      // eslint-disable-next-line no-console
+      console.error('Runtime error:', event.error || event);
+      toast.error(message);
+    };
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason: any = event.reason;
+      const message = reason?.message || String(reason) || 'Erreur inconnue';
+      // eslint-disable-next-line no-console
+      console.error('Unhandled promise rejection:', reason);
+      toast.error(message);
+    };
+
+    window.addEventListener('error', onError);
+    window.addEventListener('unhandledrejection', onUnhandledRejection);
+    return () => {
+      window.removeEventListener('error', onError);
+      window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    };
+  }, []);
   
   const [types, setTypes] = useState<RencontreType[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
@@ -36,15 +60,35 @@ export default function EditRencontrePage() {
     presenceHomme: 0,
     presenceFemme: 0,
     observations: '',
+    lieuMembreId: '',
+    lieuTexte: '',
   });
   
   const [ordreDuJour, setOrdreDuJour] = useState<OrdreDuJourItem[]>([]);
   const [membres, setMembres] = useState<Membre[]>([]);
+  const [membresPresence, setMembresPresence] = useState<Membre[]>([]);
   const [membresPresents, setMembresPresents] = useState<string[]>([]);
+  const [membresAbsents, setMembresAbsents] = useState<string[]>([]);
 
-  const membresHommes = membres.filter((m) => m.genre === 'HOMME');
-  const membresFemmes = membres.filter((m) => m.genre === 'FEMME');
-  const membresSansGenre = membres.filter((m) => !m.genre);
+  const selectedType = types.find((t) => t.id === formData.typeId);
+
+  const presentsSet = new Set(membresPresents);
+
+  const getSectionGroupLabel = (sectionName?: string | null) => {
+    const name = (sectionName || '').toUpperCase();
+    if (name.includes('S1')) return 'S1';
+    if (name.includes('S2')) return 'S2';
+    if (name.includes('S3')) return 'S3';
+    return 'S?';
+  };
+
+  const getGroupOrderForSection = (sectionName?: string | null) => {
+    const g = getSectionGroupLabel(sectionName);
+    if (g === 'S1') return ['S1', 'S2', 'S3'];
+    if (g === 'S2') return ['S2', 'S1', 'S3'];
+    if (g === 'S3') return ['S3', 'S1', 'S2'];
+    return ['S1', 'S2', 'S3'];
+  };
 
   useEffect(() => {
     fetchData();
@@ -54,13 +98,45 @@ export default function EditRencontrePage() {
   }, [id]);
 
   useEffect(() => {
-    if (membres.length === 0) return;
+    if (user?.role === 'SECTION_USER') return;
+    if (!formData.sectionId) {
+      setMembres([]);
+      setFormData((prev) => ({ ...prev, lieuMembreId: '' }));
+      return;
+    }
 
-    const presenceHomme = membres.filter(
+    const fetchMembresForSection = async () => {
+      try {
+        const membresRes = await api.get<{ membres: Membre[] }>('/membres', {
+          params: { sectionId: formData.sectionId },
+        });
+        setMembres(membresRes.data.membres || []);
+        setMembresPresence(membresRes.data.membres || []);
+
+        setFormData((prev) => {
+          if (!prev.lieuMembreId) return prev;
+          const allowed = new Set((membresRes.data.membres || []).map((m) => m.id));
+          if (allowed.has(prev.lieuMembreId)) return prev;
+          return { ...prev, lieuMembreId: '' };
+        });
+      } catch {
+        setMembres([]);
+        setMembresPresence([]);
+      }
+    };
+
+    fetchMembresForSection();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.sectionId, user?.role]);
+
+  useEffect(() => {
+    if (membresPresence.length === 0) return;
+
+    const presenceHomme = membresPresence.filter(
       (m) => m.genre === 'HOMME' && membresPresents.includes(m.id)
     ).length;
 
-    const presenceFemme = membres.filter(
+    const presenceFemme = membresPresence.filter(
       (m) => m.genre === 'FEMME' && membresPresents.includes(m.id)
     ).length;
 
@@ -69,7 +145,7 @@ export default function EditRencontrePage() {
       presenceHomme,
       presenceFemme,
     }));
-  }, [membres, membresPresents]);
+  }, [membresPresence, membresPresents]);
 
   const fetchData = async () => {
     try {
@@ -85,6 +161,7 @@ export default function EditRencontrePage() {
       // Charger les membres de la section
       const membresRes = await api.get<{ membres: Membre[] }>('/membres');
       setMembres(membresRes.data.membres || []);
+      setMembresPresence(membresRes.data.membres || []);
     } catch (error: any) {
       console.error('Erreur détaillée:', error);
       toast.error(error.response?.data?.error || 'Erreur lors du chargement des données');
@@ -115,6 +192,8 @@ export default function EditRencontrePage() {
         presenceHomme: rencontre.presenceHomme,
         presenceFemme: rencontre.presenceFemme,
         observations: rencontre.observations || '',
+        lieuMembreId: rencontre.lieuMembreId || '',
+        lieuTexte: rencontre.lieuTexte || '',
       });
       
       // Remplir l'ordre du jour
@@ -156,20 +235,41 @@ export default function EditRencontrePage() {
     setOrdreDuJour(newOrdre);
   };
 
-  const handleToggleMembre = (membreId: string) => {
-    setMembresPresents(prev => 
-      prev.includes(membreId)
-        ? prev.filter(id => id !== membreId)
-        : [...prev, membreId]
-    );
+  const preventFocusScroll = () => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && typeof active.blur === 'function') active.blur();
+  };
+
+  const handleTogglePresent = (membreId: string) => {
+    preventFocusScroll();
+    setMembresPresents((prev) => (prev.includes(membreId) ? prev.filter((id) => id !== membreId) : [...prev, membreId]));
+    setMembresAbsents((prev) => prev.filter((id) => id !== membreId));
+  };
+
+  const handleToggleAbsent = (membreId: string) => {
+    preventFocusScroll();
+    setMembresAbsents((prev) => (prev.includes(membreId) ? prev.filter((id) => id !== membreId) : [...prev, membreId]));
+    setMembresPresents((prev) => prev.filter((id) => id !== membreId));
   };
 
   const handleToggleAll = () => {
-    if (membresPresents.length === membres.length) {
-      setMembresPresents([]);
+    preventFocusScroll();
+    const eligibleIds = membresPresence.filter((m) => !!m.ageTranche).map((m) => m.id);
+    const eligibleSet = new Set(eligibleIds);
+    const presentEligibleCount = membresPresents.filter((mid) => eligibleSet.has(mid)).length;
+
+    if (eligibleIds.length > 0 && presentEligibleCount === eligibleIds.length) {
+      setMembresPresents((prev) => prev.filter((mid) => !eligibleSet.has(mid)));
+      setMembresAbsents((prev) => prev.filter((mid) => !eligibleSet.has(mid)));
     } else {
-      setMembresPresents(membres.map(m => m.id));
+      setMembresPresents((prev) => {
+        const s = new Set(prev);
+        for (const mid of eligibleIds) s.add(mid);
+        return Array.from(s);
+      });
+      setMembresAbsents((prev) => prev.filter((mid) => !eligibleSet.has(mid)));
     }
+
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -187,6 +287,9 @@ export default function EditRencontrePage() {
 
     setIsLoading(true);
     try {
+      const lieuDetails = formData.lieuTexte?.trim() || '';
+      const lieuTexteFinal = lieuDetails ? lieuDetails : null;
+
       const payload = {
         ...formData,
         presenceHomme: Number(formData.presenceHomme),
@@ -194,6 +297,8 @@ export default function EditRencontrePage() {
         presenceTotale: Number(formData.presenceHomme) + Number(formData.presenceFemme),
         ordreDuJour: ordreDuJour.filter(item => item.titre.trim() !== ''),
         membresPresents,
+        lieuMembreId: formData.lieuMembreId || null,
+        lieuTexte: lieuTexteFinal,
       };
 
       await api.put(`/rencontres/${id}`, payload);
@@ -298,6 +403,33 @@ export default function EditRencontrePage() {
             )}
 
             <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Lieu (chez un membre)</label>
+              <select
+                value={formData.lieuMembreId}
+                onChange={(e) => setFormData({ ...formData, lieuMembreId: e.target.value })}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="">Aucun</option>
+                {membres.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.prenom} {m.nom}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Détails du lieu</label>
+              <input
+                type="text"
+                value={formData.lieuTexte}
+                onChange={(e) => setFormData({ ...formData, lieuTexte: e.target.value })}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                placeholder="Ex: Quartier, adresse, repère..."
+              />
+            </div>
+
+            <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date *</label>
               <input
                 type="date"
@@ -308,27 +440,15 @@ export default function EditRencontrePage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Heure début *</label>
-                <input
-                  type="time"
-                  required
-                  value={formData.heureDebut}
-                  onChange={(e) => setFormData({ ...formData, heureDebut: e.target.value })}
-                  className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Heure fin *</label>
-                <input
-                  type="time"
-                  required
-                  value={formData.heureFin}
-                  onChange={(e) => setFormData({ ...formData, heureFin: e.target.value })}
-                  className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Heure début *</label>
+              <input
+                type="time"
+                required
+                value={formData.heureDebut}
+                onChange={(e) => setFormData({ ...formData, heureDebut: e.target.value })}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              />
             </div>
 
             <div>
@@ -530,125 +650,307 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
               <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <Users className="w-5 h-5 text-primary-600" />
                 Fiche de présence
-                {membresPresents.length > 0 && (
-                  <Badge variant="default" className="ml-2">
-                    {membresPresents.length}
-                  </Badge>
-                )}
               </h2>
-              {membres.length > 0 && (
+              {membresPresence.length > 0 && (
                 <Button
                   type="button"
                   onClick={handleToggleAll}
                   variant="outline"
                 >
-                  {membresPresents.length === membres.length ? 'Tout décocher' : 'Tout cocher'}
+                  {membresPresents.length === membresPresence.length ? 'Tout décocher' : 'Tout cocher'}
                 </Button>
               )}
             </div>
 
-          {membres.length > 0 ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                {/* Colonne Hommes */}
-                <div className="space-y-2">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Hommes ({membresHommes.length})</h3>
-                  {membresHommes.length === 0 && (
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Aucun homme inscrit</div>
-                  )}
-                  {membresHommes.map((membre) => (
-                    <label
-                      key={membre.id}
-                      className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={membresPresents.includes(membre.id)}
-                        onChange={() => handleToggleMembre(membre.id)}
-                        className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
-                          {membre.prenom} {membre.nom}
-                        </p>
-                        {membre.fonction && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{membre.fonction}</p>
-                        )}
-                      </div>
-                    </label>
-                  ))}
-                </div>
+            {membresPresence.length > 0 ? (
+              <div className="space-y-6">
+                {(() => {
+                  const buckets: Record<string, Membre[]> = { S1: [], S2: [], S3: [] };
+                  let excludedNoAge = 0;
+                  membresPresence.forEach((m: Membre) => {
+                    const label = m.ageTranche;
+                    if (!label) {
+                      excludedNoAge += 1;
+                      return;
+                    }
+                    (buckets[label] ||= []).push(m);
+                  });
 
-                {/* Colonne Femmes */}
-                <div className="space-y-2">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Femmes ({membresFemmes.length})</h3>
-                  {membresFemmes.length === 0 && (
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Aucune femme inscrite</div>
-                  )}
-                  {membresFemmes.map((membre) => (
-                    <label
-                      key={membre.id}
-                      className="flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={membresPresents.includes(membre.id)}
-                        onChange={() => handleToggleMembre(membre.id)}
-                        className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
-                          {membre.prenom} {membre.nom}
-                        </p>
-                        {membre.fonction && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{membre.fonction}</p>
+                  const order = getGroupOrderForSection(selectedType?.trancheAge?.name);
+
+                  const hasAnyGroup = order.some((g) => (buckets[g] || []).length > 0);
+                  if (!hasAnyGroup) {
+                    return (
+                      <div className="p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-900 dark:text-blue-100">
+                        Aucun membre à afficher dans S1/S2/S3.
+                        {excludedNoAge > 0 && (
+                          <div className="mt-1">
+                            <strong>{excludedNoAge}</strong> membre{excludedNoAge > 1 ? 's' : ''} ignoré{excludedNoAge > 1 ? 's' : ''} car la date de naissance (âge) est manquante.
+                            Mets à jour les membres dans la page <strong>Membres</strong>.
+                          </div>
                         )}
                       </div>
-                    </label>
-                  ))}
+                    );
+                  }
+
+                  return order
+                    .filter((g) => (buckets[g] || []).length > 0)
+                    .map((g) => {
+                      const list = buckets[g] || [];
+                      const hommes = list.filter((m: Membre) => m.genre === 'HOMME');
+                      const femmes = list.filter((m: Membre) => m.genre === 'FEMME');
+                      const sansGenre = list.filter((m: Membre) => !m.genre || (m.genre !== 'HOMME' && m.genre !== 'FEMME'));
+                      const labelHommes = g === 'S1' ? 'Garçons' : 'Hommes';
+                      const labelFemmes = g === 'S1' ? 'Filles' : 'Femmes';
+                      const title = g;
+
+                      const sortFn = (a: Membre, b: Membre) => {
+                        const aChecked = membresPresents.includes(a.id) || membresAbsents.includes(a.id);
+                        const bChecked = membresPresents.includes(b.id) || membresAbsents.includes(b.id);
+                        if (aChecked !== bChecked) return aChecked ? 1 : -1;
+                        return `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`);
+                      };
+
+                      hommes.sort(sortFn);
+                      femmes.sort(sortFn);
+                      sansGenre.sort(sortFn);
+
+                      const presentTotal = list.filter((m) => presentsSet.has(m.id)).length;
+                      const presentHommes = hommes.filter((m) => presentsSet.has(m.id)).length;
+                      const presentFemmes = femmes.filter((m) => presentsSet.has(m.id)).length;
+
+                      return (
+                        <div
+                          key={g}
+                          className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden"
+                        >
+                          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                            <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="default">Total: {list.length}</Badge>
+                              <Badge variant="secondary">Présents: {presentTotal}</Badge>
+                              <Badge variant="secondary">H: {presentHommes}</Badge>
+                              <Badge variant="accent">F: {presentFemmes}</Badge>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 items-start">
+                            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                                <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                  {labelHommes}
+                                </h4>
+                                <span className="text-sm text-gray-700 dark:text-gray-300">{hommes.length}</span>
+                              </div>
+                              <div className="p-3 space-y-2">
+                                {hommes.length === 0 && (
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">Aucun</div>
+                                )}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {hommes.map((membre: Membre) => {
+                                    const isPresent = membresPresents.includes(membre.id);
+                                    const isAbsent = membresAbsents.includes(membre.id);
+                                    return (
+                                      <div
+                                        key={membre.id}
+                                        className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                                      >
+                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words leading-snug">
+                                          {membre.prenom} {membre.nom}
+                                        </p>
+
+                                        <div className="mt-2 flex items-center gap-3">
+                                          <label
+                                            className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 font-semibold select-none"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={isPresent}
+                                              onChange={() => handleTogglePresent(membre.id)}
+                                              className="sr-only peer"
+                                              aria-label="Présent"
+                                            />
+                                            <span className="inline-flex items-center justify-center w-4 h-4 rounded border-2 border-green-600 bg-transparent text-transparent peer-checked:bg-green-600 peer-checked:border-green-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-green-500 text-xs font-bold leading-none">
+                                              ✓
+                                            </span>
+                                            P
+                                          </label>
+
+                                          <label
+                                            className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 font-semibold select-none"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={isAbsent}
+                                              onChange={() => handleToggleAbsent(membre.id)}
+                                              className="sr-only peer"
+                                              aria-label="Absent"
+                                            />
+                                            <span className="inline-flex items-center justify-center w-4 h-4 rounded border-2 border-orange-600 bg-transparent text-transparent peer-checked:bg-orange-600 peer-checked:border-orange-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500 text-xs font-bold leading-none">
+                                              ✓
+                                            </span>
+                                            A
+                                          </label>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                              <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                                <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+                                  {labelFemmes}
+                                </h4>
+                                <span className="text-sm text-gray-700 dark:text-gray-300">{femmes.length}</span>
+                              </div>
+                              <div className="p-3 space-y-2">
+                                {femmes.length === 0 && (
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">Aucune</div>
+                                )}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {femmes.map((membre: Membre) => {
+                                    const isPresent = membresPresents.includes(membre.id);
+                                    const isAbsent = membresAbsents.includes(membre.id);
+                                    return (
+                                      <div
+                                        key={membre.id}
+                                        className="p-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                                      >
+                                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words leading-snug">
+                                          {membre.prenom} {membre.nom}
+                                        </p>
+
+                                        <div className="mt-2 flex items-center gap-3">
+                                          <label
+                                            className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 font-semibold select-none"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={isPresent}
+                                              onChange={() => handleTogglePresent(membre.id)}
+                                              className="sr-only peer"
+                                              aria-label="Présent"
+                                            />
+                                            <span className="inline-flex items-center justify-center w-4 h-4 rounded border-2 border-green-600 bg-transparent text-transparent peer-checked:bg-green-600 peer-checked:border-green-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-green-500 text-xs font-bold leading-none">
+                                              ✓
+                                            </span>
+                                            P
+                                          </label>
+
+                                          <label
+                                            className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 font-semibold select-none"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={isAbsent}
+                                              onChange={() => handleToggleAbsent(membre.id)}
+                                              className="sr-only peer"
+                                              aria-label="Absent"
+                                            />
+                                            <span className="inline-flex items-center justify-center w-4 h-4 rounded border-2 border-orange-600 bg-transparent text-transparent peer-checked:bg-orange-600 peer-checked:border-orange-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500 text-xs font-bold leading-none">
+                                              ✓
+                                            </span>
+                                            A
+                                          </label>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {sansGenre.length > 0 && (
+                            <div className="px-4 pb-4">
+                              <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+                                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                                  <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">À classer</h4>
+                                  <span className="text-sm text-gray-700 dark:text-gray-300">{sansGenre.length}</span>
+                                </div>
+
+                                <div className="p-3">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {sansGenre.map((membre: Membre) => {
+                                      const isPresent = membresPresents.includes(membre.id);
+                                      const isAbsent = membresAbsents.includes(membre.id);
+                                      return (
+                                        <div
+                                          key={membre.id}
+                                          className="p-2 border border-dashed border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                                        >
+                                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words leading-snug">
+                                            {membre.prenom} {membre.nom}
+                                          </p>
+
+                                          <div className="mt-2 flex items-center gap-3">
+                                            <label
+                                              className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 font-semibold select-none"
+                                              onMouseDown={(e) => e.preventDefault()}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={isPresent}
+                                                onChange={() => handleTogglePresent(membre.id)}
+                                                className="sr-only peer"
+                                                aria-label="Présent"
+                                              />
+                                              <span className="inline-flex items-center justify-center w-4 h-4 rounded border-2 border-green-600 bg-transparent text-transparent peer-checked:bg-green-600 peer-checked:border-green-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-green-500 text-xs font-bold leading-none">
+                                                ✓
+                                              </span>
+                                              P
+                                            </label>
+
+                                            <label
+                                              className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 font-semibold select-none"
+                                              onMouseDown={(e) => e.preventDefault()}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                checked={isAbsent}
+                                                onChange={() => handleToggleAbsent(membre.id)}
+                                                className="sr-only peer"
+                                                aria-label="Absent"
+                                              />
+                                              <span className="inline-flex items-center justify-center w-4 h-4 rounded border-2 border-orange-600 bg-transparent text-transparent peer-checked:bg-orange-600 peer-checked:border-orange-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500 text-xs font-bold leading-none">
+                                                ✓
+                                              </span>
+                                              A
+                                            </label>
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                })()}
+
+                <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <p className="text-sm text-blue-900 dark:text-blue-100">
+                    <strong>{membresPresents.length}</strong> membre{membresPresents.length > 1 ? 's' : ''} présent{membresPresents.length > 1 ? 's' : ''} sur <strong>{membresPresence.length}</strong>
+                  </p>
                 </div>
               </div>
-
-              {membresSansGenre.length > 0 && (
-                <div className="space-y-2 mt-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">À classer ({membresSansGenre.length})</h3>
-                  {membresSansGenre.map((membre) => (
-                    <label
-                      key={membre.id}
-                      className="flex items-center gap-3 p-3 border border-dashed border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={membresPresents.includes(membre.id)}
-                        onChange={() => handleToggleMembre(membre.id)}
-                        className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 dark:text-gray-100 truncate">
-                          {membre.prenom} {membre.nom}
-                        </p>
-                        {membre.fonction && (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{membre.fonction}</p>
-                        )}
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <p className="text-sm text-blue-900 dark:text-blue-100">
-                  <strong>{membresPresents.length}</strong> membre{membresPresents.length > 1 ? 's' : ''} présent{membresPresents.length > 1 ? 's' : ''} sur <strong>{membres.length}</strong>
-                </p>
+            ) : (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                <Users className="w-12 h-12 mx-auto mb-2 text-gray-400 dark:text-gray-600" />
+                <p className="text-gray-900 dark:text-gray-100">Aucun membre enregistré</p>
+                <p className="text-sm">Allez dans la page "Membres" pour ajouter des membres à votre section</p>
               </div>
-            </div>
-          ) : (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <Users className="w-12 h-12 mx-auto mb-2 text-gray-400 dark:text-gray-600" />
-              <p className="text-gray-900 dark:text-gray-100">Aucun membre enregistré</p>
-              <p className="text-sm">Allez dans la page "Membres" pour ajouter des membres à votre section</p>
-            </div>
-          )}
+            )}
           </Card>
         </motion.div>
 
@@ -705,6 +1007,17 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
               rows={4}
               placeholder="Observations ou remarques..."
             />
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Heure fin *</label>
+              <input
+                type="time"
+                required
+                value={formData.heureFin}
+                onChange={(e) => setFormData({ ...formData, heureFin: e.target.value })}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              />
+            </div>
           </Card>
         </motion.div>
 

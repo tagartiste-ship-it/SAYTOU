@@ -7,11 +7,12 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
 import ThemeToggle from '../components/ThemeToggle';
-import { LogIn, Sparkles } from 'lucide-react';
+import { Eye, EyeOff, LogIn, Sparkles } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { login, isLoading } = useAuthStore();
   const navigate = useNavigate();
 
@@ -23,7 +24,8 @@ export default function LoginPage() {
     try {
       await login({ email, password });
       toast.success('Connexion réussie!');
-      navigate('/dashboard');
+      const mustChange = useAuthStore.getState().user?.mustChangePassword;
+      navigate(mustChange ? '/change-password' : '/dashboard');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Erreur de connexion');
     }
@@ -115,14 +117,25 @@ export default function LoginPage() {
               <label htmlFor="password" className="label mb-2 block text-gray-700 dark:text-gray-300">
                 Mot de passe
               </label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  className="pr-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  aria-label={showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
+              </div>
             </motion.div>
 
             <motion.div

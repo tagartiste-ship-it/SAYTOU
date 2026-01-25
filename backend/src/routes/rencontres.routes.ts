@@ -4,6 +4,13 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const router: any = express.Router();
 
+const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const isWithinEditWindow = (createdAt: Date) => {
+  const createdAtMs = createdAt instanceof Date ? createdAt.getTime() : new Date(createdAt).getTime();
+  return Date.now() - createdAtMs <= EDIT_WINDOW_MS;
+};
+
 /**
  * @swagger
  * /api/rencontres:
@@ -21,6 +28,8 @@ router.post(
       const {
         typeId,
         sectionId,
+        lieuMembreId,
+        lieuTexte,
         date,
         heureDebut,
         heureFin,
@@ -28,6 +37,7 @@ router.post(
         moniteur,
         theme,
         ordreDuJour,
+        membresPresents,
         presenceHomme,
         presenceFemme,
         observations,
@@ -145,6 +155,8 @@ router.post(
           sectionId: finalSectionId,
           scopeType,
           scopeId,
+          lieuMembreId: lieuMembreId || null,
+          lieuTexte: lieuTexte || null,
           date: new Date(date),
           heureDebut,
           heureFin,
@@ -152,6 +164,7 @@ router.post(
           moniteur,
           theme: type.isReunion ? null : theme,
           ordreDuJour: type.isReunion ? ordreDuJour : null,
+          membresPresents: Array.isArray(membresPresents) ? membresPresents : null,
           presenceHomme: presH,
           presenceFemme: presF,
           presenceTotale,
@@ -162,6 +175,7 @@ router.post(
         },
         include: {
           type: true,
+          lieuMembre: true,
           section: {
             include: {
               sousLocalite: true,
@@ -301,6 +315,13 @@ router.get(
         where: finalWhere,
         include: {
           type: true,
+          lieuMembre: {
+            select: {
+              id: true,
+              prenom: true,
+              nom: true,
+            },
+          },
           section: {
             include: {
               sousLocalite: true,
@@ -356,6 +377,13 @@ router.get(
         where: { id },
         include: {
           type: true,
+          lieuMembre: {
+            select: {
+              id: true,
+              prenom: true,
+              nom: true,
+            },
+          },
           section: {
             include: {
               sousLocalite: true,
@@ -460,6 +488,14 @@ router.put(
         return;
       }
 
+      if (!isWithinEditWindow(existingRencontre.createdAt)) {
+        res.status(403).json({
+          error: 'RENCONTRE_LOCKED',
+          message: 'Cette rencontre ne peut plus être modifiée après 24h',
+        });
+        return;
+      }
+
       // Seul le créateur du scope peut modifier
       if (role === 'SECTION_USER') {
         if (existingRencontre.scopeType !== 'SECTION' || existingRencontre.scopeId !== user.sectionId) {
@@ -486,10 +522,13 @@ router.put(
         moniteur,
         theme,
         ordreDuJour,
+        membresPresents,
         presenceHomme,
         presenceFemme,
         observations,
         attachments,
+        lieuMembreId,
+        lieuTexte,
       } = req.body;
 
       // Validation
@@ -519,15 +558,19 @@ router.put(
           moniteur: moniteur || undefined,
           theme: existingRencontre.type.isReunion ? null : (theme !== undefined ? theme : undefined),
           ordreDuJour: existingRencontre.type.isReunion ? (ordreDuJour !== undefined ? ordreDuJour : undefined) : null,
+          membresPresents: membresPresents !== undefined ? (Array.isArray(membresPresents) ? membresPresents : null) : undefined,
           presenceHomme: presH,
           presenceFemme: presF,
           presenceTotale,
           observations: observations !== undefined ? observations : undefined,
           attachments: attachments !== undefined ? attachments : undefined,
+          lieuMembreId: lieuMembreId !== undefined ? (lieuMembreId || null) : undefined,
+          lieuTexte: lieuTexte !== undefined ? (lieuTexte || null) : undefined,
           updatedById: userId,
         },
         include: {
           type: true,
+          lieuMembre: true,
           section: {
             include: {
               sousLocalite: true,
@@ -603,6 +646,14 @@ router.delete(
 
       if (!user) {
         res.status(404).json({ error: 'Utilisateur non trouvé' });
+        return;
+      }
+
+      if (!isWithinEditWindow(rencontre.createdAt)) {
+        res.status(403).json({
+          error: 'RENCONTRE_LOCKED',
+          message: 'Cette rencontre ne peut plus être supprimée après 24h',
+        });
         return;
       }
 

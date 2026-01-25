@@ -6,6 +6,52 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Début du seed...');
 
+  // Créer les tranches d'âge (distinctes des Sections)
+  const tranchesAge = [
+    { name: 'S1', ageMin: 0, ageMax: 12, order: 1, legacyName: '0-12' },
+    { name: 'S2', ageMin: 12, ageMax: 18, order: 2, legacyName: '12-18' },
+    { name: 'S3', ageMin: 18, ageMax: null as number | null, order: 3, legacyName: '18+' },
+  ];
+
+  console.log('📋 Création des tranches d\'âge...');
+  for (const tranche of tranchesAge) {
+    const existingNew = await prisma.trancheAge.findUnique({ where: { name: tranche.name } });
+
+    if (existingNew) {
+      await prisma.trancheAge.update({
+        where: { id: existingNew.id },
+        data: {
+          ageMin: tranche.ageMin,
+          ageMax: tranche.ageMax,
+          order: tranche.order,
+        },
+      });
+      continue;
+    }
+
+    const renamed = await prisma.trancheAge.updateMany({
+      where: { name: tranche.legacyName },
+      data: {
+        name: tranche.name,
+        ageMin: tranche.ageMin,
+        ageMax: tranche.ageMax,
+        order: tranche.order,
+      },
+    });
+
+    if (renamed.count > 0) continue;
+
+    await prisma.trancheAge.create({
+      data: {
+        name: tranche.name,
+        ageMin: tranche.ageMin,
+        ageMax: tranche.ageMax,
+        order: tranche.order,
+      },
+    });
+  }
+  console.log(`✅ ${tranchesAge.length} tranches d'âge créées`);
+
   // Créer les types de rencontre
   const types = [
     { name: 'GOUDI ALDIOUMA', isReunion: false },

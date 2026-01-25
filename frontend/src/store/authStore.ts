@@ -11,6 +11,7 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   login: (credentials: LoginCredentials) => Promise<void>;
+  changePassword: (payload: { currentPassword: string; newPassword: string }) => Promise<void>;
   logout: () => Promise<void>;
   fetchMe: () => Promise<void>;
   clearError: () => void;
@@ -45,6 +46,25 @@ export const useAuthStore = create<AuthState>()(
         } catch (error: any) {
           set({
             error: error.response?.data?.error || 'Erreur de connexion',
+            isLoading: false,
+          });
+          throw error;
+        }
+      },
+
+      changePassword: async ({ currentPassword, newPassword }) => {
+        set({ isLoading: true, error: null });
+        try {
+          await api.post('/auth/change-password', { currentPassword, newPassword });
+          const response = await api.get<{ user: User }>('/auth/me');
+          set({
+            user: response.data.user,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        } catch (error: any) {
+          set({
+            error: error.response?.data?.error || 'Erreur lors du changement de mot de passe',
             isLoading: false,
           });
           throw error;

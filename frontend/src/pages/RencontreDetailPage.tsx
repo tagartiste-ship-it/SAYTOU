@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Download, Calendar, Clock, Users, FileText, User } from 'lucide-react';
+import { ArrowLeft, Download, Calendar, Clock, Users, FileText, User, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
 import type { Rencontre } from '../lib/types';
@@ -183,6 +183,19 @@ export default function RencontreDetailPage() {
                   <p className="font-semibold text-gray-900">{rencontre.moniteur}</p>
                 </div>
               </div>
+              {(rencontre.lieuMembre || rencontre.lieuTexte) && (
+                <div className="flex items-start gap-3">
+                  <MapPin className="w-5 h-5 text-gray-500 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-gray-600">Lieu</p>
+                    <p className="font-semibold text-gray-900">
+                      {rencontre.lieuMembre
+                        ? `${rencontre.lieuMembre.prenom} ${rencontre.lieuMembre.nom}${rencontre.lieuTexte ? ` (${rencontre.lieuTexte})` : ''}`
+                        : (rencontre.lieuTexte || '—')}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

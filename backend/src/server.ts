@@ -16,6 +16,10 @@ import rencontresRoutes from './routes/rencontres.routes.js';
 import pdfRoutes from './routes/pdf.routes.js';
 import statsRoutes from './routes/stats.routes.js';
 import membresRoutes from './routes/membres.routes.js';
+import tranchesAgeRoutes from './routes/tranches-age.routes.js';
+import usersRoutes from './routes/users.routes.js';
+import binomesRoutes from './routes/binomes.routes.js';
+import { startBinomesAutoRotationJob } from './routes/binomes.routes.js';
 
 const app = express();
 
@@ -46,6 +50,9 @@ app.use('/api/sections', sectionsRoutes);
 app.use('/api/types', typesRoutes);
 app.use('/api/rencontres', rencontresRoutes);
 app.use('/api/membres', membresRoutes);
+app.use('/api/tranches-age', tranchesAgeRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/binomes', binomesRoutes);
 app.use('/api', pdfRoutes);
 app.use('/api/stats', statsRoutes);
 
@@ -82,6 +89,7 @@ app.use(errorHandler);
 const PORT = config.port;
 
 app.listen(PORT, () => {
+  startBinomesAutoRotationJob();
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║

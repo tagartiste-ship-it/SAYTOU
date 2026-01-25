@@ -3,6 +3,19 @@
 @tailwind utilities;
 
 @layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden !important;
+  }
+
+  html,
+  body {
+    margin: 0;
+    overscroll-behavior: none;
+  }
+
   :root {
     --border: 214 32% 91%;
     --background: 0 0% 100%;

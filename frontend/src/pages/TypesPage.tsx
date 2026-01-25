@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit, Trash2, Tag, X } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
-import type { RencontreType } from '../lib/types';
+import type { RencontreType, TrancheAge } from '../lib/types';
 import { useAuthStore } from '../store/authStore';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -14,17 +14,32 @@ import { Skeleton } from '../components/ui/Skeleton';
 export default function TypesPage() {
   const { user } = useAuthStore();
   const [types, setTypes] = useState<RencontreType[]>([]);
+  const [tranchesAge, setTranchesAge] = useState<TrancheAge[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingType, setEditingType] = useState<RencontreType | null>(null);
-  const [formData, setFormData] = useState({ name: '', isReunion: false });
+  const [formData, setFormData] = useState<{ name: string; isReunion: boolean; trancheAgeId: string }>({
+    name: '',
+    isReunion: false,
+    trancheAgeId: '',
+  });
   const draftKey = `saytou:draft:types:${user?.id ?? 'anon'}`;
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
 
   useEffect(() => {
     fetchTypes();
+    fetchTranchesAge();
   }, []);
+
+  const fetchTranchesAge = async () => {
+    try {
+      const response = await api.get<{ tranchesAge: TrancheAge[] }>('/tranches-age');
+      setTranchesAge(response.data.tranchesAge || []);
+    } catch {
+      setTranchesAge([]);
+    }
+  };
 
   const clearDraft = () => {
     try {
@@ -45,7 +60,7 @@ export default function TypesPage() {
       const parsed = JSON.parse(raw) as {
         showModal?: boolean;
         editingTypeId?: string | null;
-        formData?: { name: string; isReunion: boolean };
+        formData?: { name: string; isReunion: boolean; trancheAgeId: string };
       };
 
       if (parsed?.formData) setFormData(parsed.formData);
@@ -111,7 +126,7 @@ export default function TypesPage() {
       }
       setShowModal(false);
       setEditingType(null);
-      setFormData({ name: '', isReunion: false });
+      setFormData({ name: '', isReunion: false, trancheAgeId: '' });
       clearDraft();
       fetchTypes();
     } catch (error: any) {
@@ -121,7 +136,7 @@ export default function TypesPage() {
 
   const handleEdit = (type: RencontreType) => {
     setEditingType(type);
-    setFormData({ name: type.name, isReunion: type.isReunion });
+    setFormData({ name: type.name, isReunion: type.isReunion, trancheAgeId: type.trancheAgeId ?? '' });
     setShowModal(true);
   };
 
@@ -189,7 +204,7 @@ export default function TypesPage() {
           <p className="text-gray-600 dark:text-gray-400 mt-1">Gérez les types de rencontres</p>
         </div>
         {canManage && (
-          <Button onClick={() => { setShowModal(true); setEditingType(null); setFormData({ name: '', isReunion: false }); }} className="inline-flex items-center gap-2">
+          <Button onClick={() => { setShowModal(true); setEditingType(null); setFormData({ name: '', isReunion: false, trancheAgeId: '' }); }} className="inline-flex items-center gap-2">
             <Plus className="w-5 h-5" />
             Nouveau type
           </Button>
@@ -221,6 +236,11 @@ export default function TypesPage() {
                     <Badge variant={type.isReunion ? 'accent' : 'default'} className="mt-1">
                       {type.isReunion ? 'Réunion' : 'Rencontre'}
                     </Badge>
+                    {type.trancheAge?.name && (
+                      <Badge variant="secondary" className="mt-1 ml-2">
+                        {type.trancheAge.name}
+                      </Badge>
+                    )}
                   </div>
                 </div>
                 {canManage && (
@@ -259,7 +279,7 @@ export default function TypesPage() {
             onClick={() => {
               setShowModal(false);
               setEditingType(null);
-              setFormData({ name: '', isReunion: false });
+              setFormData({ name: '', isReunion: false, trancheAgeId: '' });
               clearDraft();
             }}
           >
@@ -280,7 +300,7 @@ export default function TypesPage() {
                   onClick={() => {
                     setShowModal(false);
                     setEditingType(null);
-                    setFormData({ name: '', isReunion: false });
+                    setFormData({ name: '', isReunion: false, trancheAgeId: '' });
                     clearDraft();
                   }}
                   className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
@@ -309,11 +329,26 @@ export default function TypesPage() {
                   />
                   <label htmlFor="isReunion" className="text-sm text-gray-700 dark:text-gray-300">C'est une réunion</label>
                 </div>
+                <div>
+                  <label className="label text-gray-700 dark:text-gray-300">Tranche d'âge</label>
+                  <select
+                    value={formData.trancheAgeId}
+                    onChange={(e) => setFormData({ ...formData, trancheAgeId: e.target.value })}
+                    className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                  >
+                    <option value="">Tout âge</option>
+                    {tranchesAge.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="flex gap-2 justify-end pt-2">
                   <Button type="button" onClick={() => {
                     setShowModal(false);
                     setEditingType(null);
-                    setFormData({ name: '', isReunion: false });
+                    setFormData({ name: '', isReunion: false, trancheAgeId: '' });
                     clearDraft();
                   }} variant="outline">
                     Annuler

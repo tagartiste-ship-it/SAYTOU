@@ -80,6 +80,7 @@ router.post(
               name: userName,
               role: 'SECTION_USER',
               sectionId: section.id,
+              mustChangePassword: true,
             },
           });
 

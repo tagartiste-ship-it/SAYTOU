@@ -1,0 +1,267 @@
+import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { KeyRound, Search, ShieldCheck, UserCog } from 'lucide-react';
+import { toast } from 'sonner';
+import api from '../lib/api';
+import type { User, UserRole } from '../lib/types';
+import { useAuthStore } from '../store/authStore';
+import { Card } from '../components/ui/Card';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Badge } from '../components/ui/Badge';
+import { Skeleton } from '../components/ui/Skeleton';
+
+export default function UsersPage() {
+  const { user } = useAuthStore();
+  const [users, setUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [query, setQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<UserRole | ''>('');
+
+  const canView = user?.role === 'LOCALITE' || user?.role === 'SOUS_LOCALITE_ADMIN';
+
+  const isLocked = (u: User) => {
+    if (!u.lockedUntil) return false;
+    const t = new Date(u.lockedUntil).getTime();
+    return Number.isFinite(t) && t > Date.now();
+  };
+
+  const unlockUser = async (u: User) => {
+    if (!confirm(`Débloquer le compte de ${u.email} ?`)) return;
+    try {
+      await api.post(`/users/${u.id}/unlock`);
+      toast.success('Compte débloqué');
+      fetchUsers();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Erreur lors du déblocage');
+    }
+  };
+
+  const resetPassword = async (u: User) => {
+    if (!confirm(`Réinitialiser le mot de passe de ${u.email} ?`)) return;
+    try {
+      const res = await api.post<{ message: string; tempPassword: string }>(`/users/${u.id}/reset-password`);
+      const pwd = res.data?.tempPassword;
+      if (pwd) {
+        window.prompt('Mot de passe temporaire (copie-le et transmets-le à l’utilisateur):', pwd);
+        try {
+          await navigator.clipboard.writeText(pwd);
+        } catch {
+        }
+        toast.success('Mot de passe temporaire généré');
+      } else {
+        toast.success('Mot de passe réinitialisé');
+      }
+      fetchUsers();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Erreur lors du reset mot de passe');
+    }
+  };
+
+  const fetchUsers = async () => {
+    if (!canView) {
+      setUsers([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const res = await api.get<{ users: User[] }>('/users', {
+        params: {
+          q: query || undefined,
+          role: roleFilter || undefined,
+        },
+      });
+      setUsers(res.data.users || []);
+    } catch (error: any) {
+      console.error('Erreur chargement utilisateurs:', error);
+      const apiError = error.response?.data?.error;
+      const apiPath = error.response?.data?.path;
+      toast.error(apiPath ? `${apiError || 'Erreur'} (${apiPath})` : apiError || 'Erreur lors du chargement des utilisateurs');
+      setUsers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      fetchUsers();
+    }, 350);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, roleFilter]);
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.08 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: { y: 0, opacity: 1 }
+  };
+
+  const roleLabel = (r: UserRole) => {
+    if (r === 'LOCALITE') return 'Super Admin';
+    if (r === 'SOUS_LOCALITE_ADMIN') return 'Admin Sous-Localité';
+    return 'Utilisateur Section';
+  };
+
+  const roleBadgeVariant = (r: UserRole) => {
+    if (r === 'LOCALITE') return 'default';
+    if (r === 'SOUS_LOCALITE_ADMIN') return 'accent';
+    return 'secondary';
+  };
+
+  const rows = useMemo(() => users, [users]);
+
+  if (!canView) {
+    return (
+      <Card className="p-12 text-center">
+        <UserCog className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Accès non autorisé</h3>
+        <p className="text-gray-600 dark:text-gray-400">Seuls LOCALITE et SOUS_LOCALITE_ADMIN peuvent accéder à cette page.</p>
+      </Card>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-12 w-64" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-11 w-full" />
+        </div>
+        <Skeleton className="h-80 w-full" />
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="space-y-6"
+    >
+      <motion.div variants={itemVariants} className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Utilisateurs</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Gérez et consultez les comptes</p>
+        </div>
+        <Badge variant="default" className="text-base px-4 py-2">
+          {users.length} utilisateur(s)
+        </Badge>
+      </motion.div>
+
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="relative">
+          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher par nom ou email..."
+            className="pl-9"
+          />
+        </div>
+
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter((e.target.value || '') as UserRole | '')}
+          className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+        >
+          <option value="">Tous les rôles</option>
+          <option value="LOCALITE">LOCALITE</option>
+          <option value="SOUS_LOCALITE_ADMIN">SOUS_LOCALITE_ADMIN</option>
+          <option value="SECTION_USER">SECTION_USER</option>
+        </select>
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <Card className="p-0 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-600 dark:text-gray-400 border-b border-gray-200 dark:border-gray-800">
+                <th className="py-3 px-4 font-medium">Nom</th>
+                <th className="py-3 px-4 font-medium">Email</th>
+                <th className="py-3 px-4 font-medium">Rôle</th>
+                <th className="py-3 px-4 font-medium">Statut</th>
+                <th className="py-3 px-4 font-medium">Sous-localité</th>
+                <th className="py-3 px-4 font-medium">Section</th>
+                <th className="py-3 px-4 font-medium">Créé le</th>
+                <th className="py-3 px-4 font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-10 px-4 text-center text-gray-600 dark:text-gray-400">
+                    Aucun utilisateur trouvé.
+                  </td>
+                </tr>
+              ) : (
+                rows.map((u) => (
+                  <tr key={u.id} className="border-b border-gray-100 dark:border-gray-800">
+                    <td className="py-3 px-4 font-medium text-gray-900 dark:text-gray-100">{u.name}</td>
+                    <td className="py-3 px-4 text-gray-900 dark:text-gray-100">{u.email}</td>
+                    <td className="py-3 px-4">
+                      <Badge variant={roleBadgeVariant(u.role)}>{roleLabel(u.role)}</Badge>
+                    </td>
+                    <td className="py-3 px-4">
+                      {isLocked(u) ? (
+                        <Badge variant="secondary">Bloqué</Badge>
+                      ) : (
+                        <Badge variant="default">Actif</Badge>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
+                      {u.sousLocalite?.name || u.section?.sousLocalite?.name || '-'}
+                    </td>
+                    <td className="py-3 px-4 text-gray-900 dark:text-gray-100">{u.section?.name || '-'}</td>
+                    <td className="py-3 px-4 text-gray-900 dark:text-gray-100">
+                      {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => resetPassword(u)}
+                          className="inline-flex items-center gap-2"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                          Reset MDP
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => unlockUser(u)}
+                          disabled={!isLocked(u)}
+                          className="inline-flex items-center gap-2"
+                        >
+                          <ShieldCheck className="w-4 h-4" />
+                          Débloquer
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </Card>
+      </motion.div>
+    </motion.div>
+  );
+}

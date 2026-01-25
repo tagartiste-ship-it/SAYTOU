@@ -4,6 +4,74 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
+type TrancheStatsItem = {
+  tranche: string;
+  nombreRencontres: number;
+  totalPresenceHomme: number;
+  totalPresenceFemme: number;
+  totalPresence: number;
+};
+
+const buildParTrancheAge = (
+  rencontresParType: Array<{
+    typeId: string;
+    _count: { id: number };
+    _sum: {
+      presenceHomme?: number | null;
+      presenceFemme?: number | null;
+      presenceTotale?: number | null;
+    };
+  }>,
+  typeIdToTrancheName: Map<string, string>
+): TrancheStatsItem[] => {
+  const acc = new Map<string, TrancheStatsItem>();
+
+  for (const stat of rencontresParType) {
+    const tranche = typeIdToTrancheName.get(stat.typeId) ?? 'Non défini';
+    const current = acc.get(tranche) ?? {
+      tranche,
+      nombreRencontres: 0,
+      totalPresenceHomme: 0,
+      totalPresenceFemme: 0,
+      totalPresence: 0,
+    };
+
+    current.nombreRencontres += stat._count.id;
+    current.totalPresenceHomme += stat._sum.presenceHomme ?? 0;
+    current.totalPresenceFemme += stat._sum.presenceFemme ?? 0;
+    current.totalPresence += stat._sum.presenceTotale ?? 0;
+    acc.set(tranche, current);
+  }
+
+  const order: Record<string, number> = { 'Tout âge': 0, S1: 1, S2: 2, S3: 3, 'Non défini': 4 };
+
+  const values = Array.from(acc.values());
+  const toutAge: TrancheStatsItem = {
+    tranche: 'Tout âge',
+    nombreRencontres: 0,
+    totalPresenceHomme: 0,
+    totalPresenceFemme: 0,
+    totalPresence: 0,
+  };
+
+  for (const v of values) {
+    toutAge.nombreRencontres += v.nombreRencontres;
+    toutAge.totalPresenceHomme += v.totalPresenceHomme;
+    toutAge.totalPresenceFemme += v.totalPresenceFemme;
+    toutAge.totalPresence += v.totalPresence;
+  }
+
+  const sorted = values.sort((a, b) => {
+    const oa = order[a.tranche] ?? 999;
+    const ob = order[b.tranche] ?? 999;
+    if (oa !== ob) return oa - ob;
+    return a.tranche.localeCompare(b.tranche);
+  });
+
+  if (toutAge.nombreRencontres === 0 && sorted.length === 0) return [];
+  return [toutAge, ...sorted];
+};
+
 /**
  * @swagger
  * /api/stats/section/{id}:
@@ -84,6 +152,24 @@ router.get(
         },
       });
 
+      const typeIds = rencontresParType.map((r) => r.typeId);
+      const types = await prisma.rencontreType.findMany({
+        where: { id: { in: typeIds } },
+        select: {
+          id: true,
+          trancheAge: {
+            select: { name: true },
+          },
+        },
+      });
+
+      const typeIdToTrancheName = new Map<string, string>();
+      for (const t of types) {
+        if (t.trancheAge?.name) typeIdToTrancheName.set(t.id, t.trancheAge.name);
+      }
+
+      const parTrancheAge = buildParTrancheAge(rencontresParType, typeIdToTrancheName);
+
       const typesWithStats = await Promise.all(
         rencontresParType.map(async (stat) => {
           const type = await prisma.rencontreType.findUnique({
@@ -124,6 +210,7 @@ router.get(
           moyennePresenceHomme: Math.round(moyennePresenceHomme * 10) / 10,
           moyennePresenceFemme: Math.round(moyennePresenceFemme * 10) / 10,
           moyennePresence: Math.round(moyennePresence * 10) / 10,
+          parTrancheAge,
         },
         parType: typesWithStats,
         rencontresRecentes,
@@ -233,6 +320,24 @@ router.get(
         },
       });
 
+      const typeIds = rencontresParType.map((r) => r.typeId);
+      const types = await prisma.rencontreType.findMany({
+        where: { id: { in: typeIds } },
+        select: {
+          id: true,
+          trancheAge: {
+            select: { name: true },
+          },
+        },
+      });
+
+      const typeIdToTrancheName = new Map<string, string>();
+      for (const t of types) {
+        if (t.trancheAge?.name) typeIdToTrancheName.set(t.id, t.trancheAge.name);
+      }
+
+      const parTrancheAge = buildParTrancheAge(rencontresParType, typeIdToTrancheName);
+
       const typesWithStats = await Promise.all(
         rencontresParType.map(async (stat) => {
           const type = await prisma.rencontreType.findUnique({
@@ -266,6 +371,7 @@ router.get(
           moyennePresenceHomme: Math.round(moyennePresenceHomme * 10) / 10,
           moyennePresenceFemme: Math.round(moyennePresenceFemme * 10) / 10,
           moyennePresence: Math.round(moyennePresence * 10) / 10,
+          parTrancheAge,
         },
         parSection: statsParSection,
         parType: typesWithStats,
@@ -316,14 +422,38 @@ router.get(
       const totalPresenceFemme = rencontres.reduce((sum, r) => sum + r.presenceFemme, 0);
       const totalPresence = rencontres.reduce((sum, r) => sum + r.presenceTotale, 0);
 
+      const moyennePresenceHomme = totalRencontres > 0 ? totalPresenceHomme / totalRencontres : 0;
+      const moyennePresenceFemme = totalRencontres > 0 ? totalPresenceFemme / totalRencontres : 0;
+      const moyennePresence = totalRencontres > 0 ? totalPresence / totalRencontres : 0;
+
       // Statistiques par type
       const rencontresParType = await prisma.rencontre.groupBy({
         by: ['typeId'],
         _count: { id: true },
         _sum: {
+          presenceHomme: true,
+          presenceFemme: true,
           presenceTotale: true,
         },
       });
+
+      const typeIds = rencontresParType.map((r) => r.typeId);
+      const types = await prisma.rencontreType.findMany({
+        where: { id: { in: typeIds } },
+        select: {
+          id: true,
+          trancheAge: {
+            select: { name: true },
+          },
+        },
+      });
+
+      const typeIdToTrancheName = new Map<string, string>();
+      for (const t of types) {
+        if (t.trancheAge?.name) typeIdToTrancheName.set(t.id, t.trancheAge.name);
+      }
+
+      const parTrancheAge = buildParTrancheAge(rencontresParType, typeIdToTrancheName);
 
       const typesWithStats = await Promise.all(
         rencontresParType.map(async (stat) => {
@@ -347,6 +477,10 @@ router.get(
           totalPresenceHomme,
           totalPresenceFemme,
           totalPresence,
+          moyennePresenceHomme: Math.round(moyennePresenceHomme * 10) / 10,
+          moyennePresenceFemme: Math.round(moyennePresenceFemme * 10) / 10,
+          moyennePresence: Math.round(moyennePresence * 10) / 10,
+          parTrancheAge,
         },
         parType: typesWithStats,
       });

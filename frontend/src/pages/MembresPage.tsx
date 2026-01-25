@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Plus, Trash2, Edit2, Save, X, UserCircle, Phone, CreditCard, Briefcase } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
-import type { Membre } from '../lib/types';
+import type { Membre, Pagination } from '../lib/types';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -13,8 +13,26 @@ import { Skeleton } from '../components/ui/Skeleton';
 export default function MembresPage() {
   const [membres, setMembres] = useState<Membre[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(100);
+
+  const [q, setQ] = useState('');
+  const [genreFilter, setGenreFilter] = useState('');
+  const [fonctionFilter, setFonctionFilter] = useState('');
+  const [corpsMetierFilter, setCorpsMetierFilter] = useState('');
+  const [groupeSanguinFilter, setGroupeSanguinFilter] = useState('');
+  const [telephoneFilter, setTelephoneFilter] = useState('');
+  const [numeroCNIFilter, setNumeroCNIFilter] = useState('');
+  const [numeroCarteElecteurFilter, setNumeroCarteElecteurFilter] = useState('');
+  const [statutElecteurFilter, setStatutElecteurFilter] = useState('');
+
+  const [qDebounced, setQDebounced] = useState('');
+  const abortRef = useRef<AbortController | null>(null);
+  const firstLoadDoneRef = useRef(false);
   const draftKey = 'saytou:draft:membres';
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   
@@ -27,12 +45,47 @@ export default function MembresPage() {
     corpsMetier: '',
     groupeSanguin: '',
     telephone: '',
-    numeroCNI: ''
+    numeroCNI: '',
+    adresse: '',
+    dateNaissance: '',
+    numeroCarteElecteur: '',
+    lieuVote: ''
   });
 
   useEffect(() => {
+    const t = window.setTimeout(() => setQDebounced(q.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [q]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [
+    qDebounced,
+    genreFilter,
+    fonctionFilter,
+    corpsMetierFilter,
+    groupeSanguinFilter,
+    telephoneFilter,
+    numeroCNIFilter,
+    numeroCarteElecteurFilter,
+    statutElecteurFilter,
+  ]);
+
+  useEffect(() => {
     fetchMembres();
-  }, []);
+  }, [
+    page,
+    limit,
+    qDebounced,
+    genreFilter,
+    fonctionFilter,
+    corpsMetierFilter,
+    groupeSanguinFilter,
+    telephoneFilter,
+    numeroCNIFilter,
+    numeroCarteElecteurFilter,
+    statutElecteurFilter,
+  ]);
 
   const clearDraft = () => {
     try {
@@ -87,21 +140,49 @@ export default function MembresPage() {
   }, [draftKey, formData, isAdding, editingId, hasRestoredDraft]);
 
   const fetchMembres = async () => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
-      setIsLoading(true);
+      if (!firstLoadDoneRef.current) setIsLoading(true);
+      setIsFetching(true);
       // Pour SECTION_USER, pas besoin de paramètres (utilise automatiquement sa section)
       // Pour les autres rôles, on peut filtrer par section si nécessaire
-      const response = await api.get('/membres');
+      const params: Record<string, any> = {
+        page,
+        limit,
+      };
+      if (qDebounced) params.q = qDebounced;
+      if (genreFilter) params.genre = genreFilter;
+      if (fonctionFilter) params.fonction = fonctionFilter;
+      if (corpsMetierFilter) params.corpsMetier = corpsMetierFilter;
+      if (groupeSanguinFilter) params.groupeSanguin = groupeSanguinFilter;
+      if (telephoneFilter) params.telephone = telephoneFilter;
+      if (numeroCNIFilter) params.numeroCNI = numeroCNIFilter;
+      if (numeroCarteElecteurFilter) params.numeroCarteElecteur = numeroCarteElecteurFilter;
+      if (statutElecteurFilter) params.statutElecteur = statutElecteurFilter;
+
+      const response = await api.get<{ membres: Membre[]; pagination?: Pagination }>('/membres', { params, signal: controller.signal });
       setMembres(response.data.membres || []);
+      setPagination(response.data.pagination ?? null);
     } catch (error: any) {
+      if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
+        return;
+      }
       console.error('Erreur chargement membres:', error);
       // Initialiser avec un tableau vide en cas d'erreur
-      setMembres([]);
+      if (!firstLoadDoneRef.current) {
+        setMembres([]);
+        setPagination(null);
+      }
       // Afficher un message d'erreur plus détaillé
       const errorMsg = error.response?.data?.error || error.message || 'Erreur lors du chargement des membres';
       toast.error(errorMsg);
     } finally {
+      firstLoadDoneRef.current = true;
       setIsLoading(false);
+      setIsFetching(false);
     }
   };
 
@@ -116,12 +197,17 @@ export default function MembresPage() {
       corpsMetier: '',
       groupeSanguin: '',
       telephone: '',
-      numeroCNI: ''
+      numeroCNI: '',
+      adresse: '',
+      dateNaissance: '',
+      numeroCarteElecteur: '',
+      lieuVote: ''
     });
   };
 
   const handleEdit = (membre: Membre) => {
     setEditingId(membre.id);
+    const dateNaissance = membre.dateNaissance ? String(membre.dateNaissance).slice(0, 10) : '';
     setFormData({
       photo: membre.photo || '',
       prenom: membre.prenom,
@@ -131,7 +217,11 @@ export default function MembresPage() {
       corpsMetier: membre.corpsMetier || '',
       groupeSanguin: membre.groupeSanguin || '',
       telephone: membre.telephone || '',
-      numeroCNI: membre.numeroCNI || ''
+      numeroCNI: membre.numeroCNI || '',
+      adresse: membre.adresse || '',
+      dateNaissance,
+      numeroCarteElecteur: membre.numeroCarteElecteur || '',
+      lieuVote: membre.lieuVote || ''
     });
   };
 
@@ -148,13 +238,27 @@ export default function MembresPage() {
       corpsMetier: '',
       groupeSanguin: '',
       telephone: '',
-      numeroCNI: ''
+      numeroCNI: '',
+      adresse: '',
+      dateNaissance: '',
+      numeroCarteElecteur: '',
+      lieuVote: ''
     });
   };
 
   const handleSave = async () => {
     if (!formData.prenom || !formData.nom) {
       toast.error('Le prénom et le nom sont requis');
+      return;
+    }
+
+    if (!formData.dateNaissance) {
+      toast.error('La date de naissance est requise');
+      return;
+    }
+
+    if (String(formData.numeroCarteElecteur || '').trim() && !String(formData.lieuVote || '').trim()) {
+      toast.error('Le lieu de vote est obligatoire si le numéro de carte électeur est renseigné');
       return;
     }
 
@@ -189,6 +293,18 @@ export default function MembresPage() {
     }
   };
 
+  const resetFilters = () => {
+    setQ('');
+    setGenreFilter('');
+    setFonctionFilter('');
+    setCorpsMetierFilter('');
+    setGroupeSanguinFilter('');
+    setTelephoneFilter('');
+    setNumeroCNIFilter('');
+    setNumeroCarteElecteurFilter('');
+    setStatutElecteurFilter('');
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -206,6 +322,8 @@ export default function MembresPage() {
   const membresFemmes = membres.filter((membre) => membre.genre === 'FEMME');
   const membresSansGenre = membres.filter((membre) => !membre.genre);
   const totalMembres = membres.length;
+
+  const isElecteurMode = Boolean(statutElecteurFilter);
 
   if (isLoading) {
     return (
@@ -251,6 +369,138 @@ export default function MembresPage() {
             Ajouter un membre
           </Button>
         </div>
+      </motion.div>
+
+      {isFetching ? (
+        <motion.div variants={itemVariants} className="text-sm text-gray-600 dark:text-gray-400">
+          Recherche en cours...
+        </motion.div>
+      ) : null}
+
+      <motion.div variants={itemVariants}>
+        <Card className="p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="lg:col-span-2">
+              <label className="label text-gray-700 dark:text-gray-300">Recherche</label>
+              <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Nom, prénom, téléphone, CNI..." />
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">Genre</label>
+              <select
+                value={genreFilter}
+                onChange={(e) => setGenreFilter(e.target.value)}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="">Tous</option>
+                <option value="HOMME">Hommes</option>
+                <option value="FEMME">Femmes</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">Groupe sanguin</label>
+              <select
+                value={groupeSanguinFilter}
+                onChange={(e) => setGroupeSanguinFilter(e.target.value)}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="">Tous</option>
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">Fonction</label>
+              <Input value={fonctionFilter} onChange={(e) => setFonctionFilter(e.target.value)} placeholder="Ex: Président" />
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">Corps de métier</label>
+              <Input value={corpsMetierFilter} onChange={(e) => setCorpsMetierFilter(e.target.value)} placeholder="Ex: Enseignant" />
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">Téléphone</label>
+              <Input value={telephoneFilter} onChange={(e) => setTelephoneFilter(e.target.value)} placeholder="+221..." />
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">N° CNI</label>
+              <Input value={numeroCNIFilter} onChange={(e) => setNumeroCNIFilter(e.target.value)} placeholder="CNI..." />
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">N° carte électeur</label>
+              <Input value={numeroCarteElecteurFilter} onChange={(e) => setNumeroCarteElecteurFilter(e.target.value)} placeholder="Carte électeur..." />
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">Statut électeur</label>
+              <select
+                value={statutElecteurFilter}
+                onChange={(e) => setStatutElecteurFilter(e.target.value)}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="">Tous</option>
+                <option value="VOTANT">Votants (18+ avec n° électeur)</option>
+                <option value="NON_VOTANT">Non votants (18+ sans n° électeur)</option>
+                <option value="PRIMO">Primo-votants (18 ans)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={resetFilters}>
+                Réinitialiser
+              </Button>
+              <Button variant="outline" onClick={() => fetchMembres()}>
+                Actualiser
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-2 justify-end">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Par page</span>
+              <select
+                value={String(limit)}
+                onChange={(e) => setLimit(Number(e.target.value) || 100)}
+                className="flex h-11 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+
+          {pagination ? (
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {pagination.total} résultat(s) — Page {pagination.page}/{pagination.totalPages}
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <Button variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pagination.page <= 1}>
+                  Précédent
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
+                  disabled={pagination.page >= pagination.totalPages}
+                >
+                  Suivant
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </Card>
       </motion.div>
 
       {/* Liste des membres */}
@@ -364,6 +614,41 @@ export default function MembresPage() {
                         placeholder="N° CNI"
                       />
                     </div>
+
+                    <div>
+                      <label className="label text-gray-700 dark:text-gray-300">Adresse</label>
+                      <Input
+                        value={formData.adresse}
+                        onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
+                        placeholder="Adresse"
+                      />
+                    </div>
+                    <div>
+                      <label className="label text-gray-700 dark:text-gray-300">Date de naissance *</label>
+                      <Input
+                        type="date"
+                        value={formData.dateNaissance}
+                        onChange={(e) => setFormData({ ...formData, dateNaissance: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="label text-gray-700 dark:text-gray-300">N° carte électeur</label>
+                      <Input
+                        value={formData.numeroCarteElecteur}
+                        onChange={(e) => setFormData({ ...formData, numeroCarteElecteur: e.target.value })}
+                        placeholder="N° carte électeur"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="label text-gray-700 dark:text-gray-300">Lieu de vote</label>
+                      <Input
+                        value={formData.lieuVote}
+                        onChange={(e) => setFormData({ ...formData, lieuVote: e.target.value })}
+                        placeholder="Lieu de vote"
+                      />
+                    </div>
                     <div>
                       <label className="label text-gray-700 dark:text-gray-300">Photo (URL)</label>
                       <Input
@@ -388,27 +673,75 @@ export default function MembresPage() {
             )}
           </AnimatePresence>
 
-          {/* Cartes des membres - disposition en deux colonnes Hommes / Femmes */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-            {/* Colonne Hommes */}
-            <div className="space-y-3">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Hommes ({membresHommes.length})</h2>
-              {membresHommes.length === 0 && (
-                <Card className="p-6 text-center text-gray-500 dark:text-gray-400">
-                  Aucun homme enregistré
-                </Card>
-              )}
-              {membresHommes.map((membre, index) => (
-                <motion.div
-                  key={membre.id}
-                  variants={itemVariants}
-                  custom={index}
-                >
-                  {editingId === membre.id ? (
-                    <Card className="p-6 border-2 border-accent">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Modifier le membre</h3>
-                        <Badge variant="accent">Édition</Badge>
+          {isElecteurMode ? (
+            <Card className="p-4 overflow-auto">
+              <table className="min-w-full border-collapse">
+                <thead>
+                  <tr>
+                    <th className="border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 w-14">
+                      N°
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Prénom
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Nom
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      N° identité
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      N° électeur
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Lieu de vote
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Téléphone
+                    </th>
+                    <th className="border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Signature
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {membres.map((m, idx) => (
+                    <tr key={m.id}>
+                      <td className="border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{idx + 1}</td>
+                      <td className="border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{m.prenom}</td>
+                      <td className="border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{m.nom}</td>
+                      <td className="border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{m.numeroCNI || ''}</td>
+                      <td className="border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{m.numeroCarteElecteur || ''}</td>
+                      <td className="border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{m.lieuVote || ''}</td>
+                      <td className="border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100">{m.telephone || ''}</td>
+                      <td className="border border-gray-300 dark:border-gray-700 px-3 py-6" />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </Card>
+          ) : (
+            /* Cartes des membres - disposition en deux colonnes Hommes / Femmes */
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              {/* Colonne Hommes */}
+              <div className="space-y-3">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Hommes ({membresHommes.length})</h2>
+                {membresHommes.length === 0 && (
+                  <Card className="p-6 text-center text-gray-500 dark:text-gray-400">
+                    Aucun homme enregistré
+                  </Card>
+                )}
+                {membresHommes.map((membre, index) => (
+                  <motion.div
+                    key={membre.id}
+                    variants={itemVariants}
+                    custom={index}
+                  >
+                    {editingId === membre.id ? (
+                      <Card className="p-6 border-2 border-accent">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Modifier le membre</h3>
+                          <Badge variant="accent">Édition</Badge>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
@@ -487,6 +820,36 @@ export default function MembresPage() {
                           />
                         </div>
                         <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Adresse</label>
+                          <Input
+                            value={formData.adresse}
+                            onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Date de naissance *</label>
+                          <Input
+                            type="date"
+                            value={formData.dateNaissance}
+                            onChange={(e) => setFormData({ ...formData, dateNaissance: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">N° carte électeur</label>
+                          <Input
+                            value={formData.numeroCarteElecteur}
+                            onChange={(e) => setFormData({ ...formData, numeroCarteElecteur: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Lieu de vote</label>
+                          <Input
+                            value={formData.lieuVote}
+                            onChange={(e) => setFormData({ ...formData, lieuVote: e.target.value })}
+                          />
+                        </div>
+                        <div>
                           <label className="label text-gray-700 dark:text-gray-300">Photo (URL)</label>
                           <Input
                             value={formData.photo}
@@ -544,6 +907,17 @@ export default function MembresPage() {
                                     {membre.genre === 'HOMME' ? '👨 Homme' : '👩 Femme'}
                                   </Badge>
                                 )}
+                                {typeof membre.age === 'number' && (
+                                  <Badge variant={membre.isEligibleToVote ? 'accent' : 'default'}>
+                                    {membre.age} ans
+                                  </Badge>
+                                )}
+                                {membre.ageTranche && (
+                                  <Badge variant="secondary">{membre.ageTranche}</Badge>
+                                )}
+                                {membre.isEligibleToVote && (
+                                  <Badge variant="accent">Peut voter</Badge>
+                                )}
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -588,6 +962,12 @@ export default function MembresPage() {
                               <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                                 <CreditCard className="w-4 h-4" />
                                 <span>{membre.numeroCNI}</span>
+                              </div>
+                            )}
+                            {membre.numeroCarteElecteur && (
+                              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                <CreditCard className="w-4 h-4" />
+                                <span>{membre.numeroCarteElecteur}</span>
                               </div>
                             )}
                           </div>
@@ -696,6 +1076,35 @@ export default function MembresPage() {
                           />
                         </div>
                         <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Adresse</label>
+                          <Input
+                            value={formData.adresse}
+                            onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Date de naissance</label>
+                          <Input
+                            type="date"
+                            value={formData.dateNaissance}
+                            onChange={(e) => setFormData({ ...formData, dateNaissance: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">N° carte électeur</label>
+                          <Input
+                            value={formData.numeroCarteElecteur}
+                            onChange={(e) => setFormData({ ...formData, numeroCarteElecteur: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Lieu de vote</label>
+                          <Input
+                            value={formData.lieuVote}
+                            onChange={(e) => setFormData({ ...formData, lieuVote: e.target.value })}
+                          />
+                        </div>
+                        <div>
                           <label className="label text-gray-700 dark:text-gray-300">Photo (URL)</label>
                           <Input
                             value={formData.photo}
@@ -753,6 +1162,17 @@ export default function MembresPage() {
                                     {membre.genre === 'HOMME' ? '👨 Homme' : '👩 Femme'}
                                   </Badge>
                                 )}
+                                {typeof membre.age === 'number' && (
+                                  <Badge variant={membre.isEligibleToVote ? 'accent' : 'default'}>
+                                    {membre.age} ans
+                                  </Badge>
+                                )}
+                                {membre.ageTranche && (
+                                  <Badge variant="secondary">{membre.ageTranche}</Badge>
+                                )}
+                                {membre.isEligibleToVote && (
+                                  <Badge variant="accent">Peut voter</Badge>
+                                )}
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -799,6 +1219,12 @@ export default function MembresPage() {
                                 <span>{membre.numeroCNI}</span>
                               </div>
                             )}
+                            {membre.numeroCarteElecteur && (
+                              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                <CreditCard className="w-4 h-4" />
+                                <span>{membre.numeroCarteElecteur}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -809,8 +1235,10 @@ export default function MembresPage() {
             </div>
           </div>
 
+          )}
+
           {/* Cartes des membres - SANS GENRE */}
-          {membresSansGenre.length > 0 && (
+          {!isElecteurMode && membresSansGenre.length > 0 && (
             <div className="space-y-3 mt-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">À classer ({membresSansGenre.length})</h2>
               {membresSansGenre.map((membre, index) => (
@@ -902,6 +1330,35 @@ export default function MembresPage() {
                           />
                         </div>
                         <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Adresse</label>
+                          <Input
+                            value={formData.adresse}
+                            onChange={(e) => setFormData({ ...formData, adresse: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Date de naissance</label>
+                          <Input
+                            type="date"
+                            value={formData.dateNaissance}
+                            onChange={(e) => setFormData({ ...formData, dateNaissance: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">N° carte électeur</label>
+                          <Input
+                            value={formData.numeroCarteElecteur}
+                            onChange={(e) => setFormData({ ...formData, numeroCarteElecteur: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Lieu de vote</label>
+                          <Input
+                            value={formData.lieuVote}
+                            onChange={(e) => setFormData({ ...formData, lieuVote: e.target.value })}
+                          />
+                        </div>
+                        <div>
                           <label className="label text-gray-700 dark:text-gray-300">Photo (URL)</label>
                           <Input
                             value={formData.photo}
@@ -959,6 +1416,17 @@ export default function MembresPage() {
                                     {membre.genre === 'HOMME' ? '👨 Homme' : '👩 Femme'}
                                   </Badge>
                                 )}
+                                {typeof membre.age === 'number' && (
+                                  <Badge variant={membre.isEligibleToVote ? 'accent' : 'default'}>
+                                    {membre.age} ans
+                                  </Badge>
+                                )}
+                                {membre.ageTranche && (
+                                  <Badge variant="secondary">{membre.ageTranche}</Badge>
+                                )}
+                                {membre.isEligibleToVote && (
+                                  <Badge variant="accent">Peut voter</Badge>
+                                )}
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -1003,6 +1471,12 @@ export default function MembresPage() {
                               <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                                 <CreditCard className="w-4 h-4" />
                                 <span>{membre.numeroCNI}</span>
+                              </div>
+                            )}
+                            {membre.numeroCarteElecteur && (
+                              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
+                                <CreditCard className="w-4 h-4" />
+                                <span>{membre.numeroCarteElecteur}</span>
                               </div>
                             )}
                           </div>

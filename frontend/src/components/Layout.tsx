@@ -5,22 +5,156 @@ import {
   Calendar,
   CalendarCheck,
   Users,
+  UserCog,
   Building2,
   Tags, 
   BarChart3, 
+  UsersRound,
   LogOut,
   Menu,
   X
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import ThemeToggle from './ThemeToggle';
+import api from '../lib/api';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const mainRef = useRef<HTMLElement | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const [hasNewBinomeCycle, setHasNewBinomeCycle] = useState(false);
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+
+    // Prevent window-level scroll. The app uses #app-scroll-container as the only scrollable area.
+    // Some interactions (focus/label click) can still move window scroll, which looks like a black screen
+    // because the page background is dark.
+    const lockWindowScroll = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+
+    // Ensure window is at the top on navigation.
+    lockWindowScroll();
+
+    el.scrollTop = 0;
+    requestAnimationFrame(() => {
+      el.scrollTop = 0;
+      requestAnimationFrame(() => {
+        el.scrollTop = 0;
+      });
+    });
+
+    const t1 = window.setTimeout(() => {
+      el.scrollTop = 0;
+    }, 0);
+    const t2 = window.setTimeout(() => {
+      el.scrollTop = 0;
+    }, 50);
+
+    let raf = 0;
+    let t3 = 0;
+    let t4 = 0;
+    const clamp = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const maxY = Math.max(0, el.scrollHeight - el.clientHeight);
+        if (el.scrollTop > maxY) el.scrollTop = maxY;
+      });
+
+      window.clearTimeout(t3);
+      window.clearTimeout(t4);
+      t3 = window.setTimeout(() => {
+        const maxY = Math.max(0, el.scrollHeight - el.clientHeight);
+        if (el.scrollTop > maxY) el.scrollTop = maxY;
+      }, 150);
+      t4 = window.setTimeout(() => {
+        const maxY = Math.max(0, el.scrollHeight - el.clientHeight);
+        if (el.scrollTop > maxY) el.scrollTop = maxY;
+      }, 350);
+    };
+
+    const onResize = () => clamp();
+    window.addEventListener('resize', onResize);
+
+    window.addEventListener('scroll', lockWindowScroll, { passive: true });
+
+    const onScroll = () => clamp();
+    el.addEventListener('scroll', onScroll, { passive: true });
+
+    const mo = new MutationObserver(() => clamp());
+    mo.observe(el, { subtree: true, childList: true, characterData: true, attributes: true });
+
+    clamp();
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+      window.clearTimeout(t4);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('scroll', lockWindowScroll);
+      el.removeEventListener('scroll', onScroll);
+      mo.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const KEY = 'binomes:lastSeenCycleId';
+    const check = async () => {
+      try {
+        const res = await api.get('/binomes/status');
+        const cycle = res.data?.cycle;
+        const lastSeen = localStorage.getItem(KEY);
+        if (cycle?.id && cycle.id !== lastSeen) {
+          setHasNewBinomeCycle(true);
+        } else {
+          setHasNewBinomeCycle(false);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    void check();
+    const t = window.setInterval(() => {
+      void check();
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(t);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (location.pathname !== '/binomes') return;
+    const KEY = 'binomes:lastSeenCycleId';
+    const markSeen = async () => {
+      try {
+        const res = await api.get('/binomes/status');
+        const cycle = res.data?.cycle;
+        if (cycle?.id) {
+          localStorage.setItem(KEY, cycle.id);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setHasNewBinomeCycle(false);
+      }
+    };
+    void markSeen();
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     await logout();
@@ -32,6 +166,8 @@ export default function Layout() {
     { name: 'Mes Rencontres', href: '/mes-rencontres', icon: CalendarCheck },
     { name: 'Historique', href: '/rencontres', icon: Calendar },
     { name: 'Membres', href: '/membres', icon: Users },
+    { name: 'Binômes', href: '/binomes', icon: UsersRound },
+    { name: 'Utilisateurs', href: '/users', icon: UserCog, roles: ['LOCALITE', 'SOUS_LOCALITE_ADMIN'] },
     { name: 'Sous-Localités', href: '/sous-localites', icon: Building2, roles: ['LOCALITE'] },
     { name: 'Sections', href: '/sections', icon: Building2, roles: ['LOCALITE', 'SOUS_LOCALITE_ADMIN'] },
     { name: 'Types', href: '/types', icon: Tags },
@@ -84,11 +220,22 @@ export default function Layout() {
                     className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                       isActive(item.href)
                         ? 'bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-primary/25'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        : `${
+                            item.href === '/binomes' && hasNewBinomeCycle
+                              ? 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 ring-2 ring-red-500 animate-pulse'
+                              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                          }`
                     }`}
                   >
                     <item.icon className="h-5 w-5" />
-                    {item.name}
+                    <span className="flex items-center gap-2">
+                      <span>{item.name}</span>
+                      {item.href === '/binomes' && hasNewBinomeCycle && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-red-600 text-white">
+                          Nouveau
+                        </span>
+                      )}
+                    </span>
                   </Link>
                 ))}
               </nav>
@@ -114,11 +261,22 @@ export default function Layout() {
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
                   isActive(item.href)
                     ? 'bg-gradient-to-r from-primary to-primary/90 text-white shadow-lg shadow-primary/25'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    : `${
+                        item.href === '/binomes' && hasNewBinomeCycle
+                          ? 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 ring-2 ring-red-500 animate-pulse'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`
                 }`}
               >
                 <item.icon className="h-5 w-5" />
-                {item.name}
+                <span className="flex items-center gap-2">
+                  <span>{item.name}</span>
+                  {item.href === '/binomes' && hasNewBinomeCycle && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-red-600 text-white">
+                      Nouveau
+                    </span>
+                  )}
+                </span>
               </Link>
             ))}
           </nav>
@@ -164,7 +322,7 @@ export default function Layout() {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 p-4 lg:p-8">
+        <main ref={mainRef} id="app-scroll-container" className="flex-1 overflow-y-auto overscroll-none bg-gray-50 dark:bg-gray-950 p-4 lg:p-8">
           <Outlet />
         </main>
       </div>

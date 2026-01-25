@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Plus, Trash2, FileText, Calendar, Users, Clock, Filter, Download, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, FileText, Calendar, Users, Clock, Filter, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
 import type { Rencontre } from '../lib/types';
@@ -97,6 +97,10 @@ export default function MesRencontresPage() {
   };
 
   const canModify = (rencontre: Rencontre) => {
+    const createdAtMs = new Date(rencontre.createdAt).getTime();
+    const within24h = Date.now() - createdAtMs <= 24 * 60 * 60 * 1000;
+    if (!within24h) return false;
+
     // L'utilisateur peut modifier uniquement ses propres rencontres
     if (user?.role === 'SECTION_USER') {
       return rencontre.scopeType === 'SECTION' && rencontre.scopeId === user.sectionId;
@@ -331,6 +335,15 @@ export default function MesRencontresPage() {
                   </motion.button>
                   {canModify(rencontre) && (
                     <>
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => navigate(`/rencontres/${rencontre.id}/edit`)}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                        title="Modifier"
+                      >
+                        <Pencil className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                      </motion.button>
                       <motion.button
                         whileHover={{ scale: 1.1 }}
                         whileTap={{ scale: 0.95 }}

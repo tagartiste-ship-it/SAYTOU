@@ -23,144 +23,216 @@ enum ScopeType {
 }
 
 model User {
-  id                String          @id @default(uuid())
-  email             String          @unique
-  passwordHash      String          @map("password_hash")
-  role              UserRole
-  name              String
-  sousLocaliteId    String?         @map("sous_localite_id")
-  sectionId         String?         @map("section_id")
-  refreshToken      String?         @map("refresh_token")
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
-  
-  sousLocalite      SousLocalite?   @relation(fields: [sousLocaliteId], references: [id], onDelete: SetNull)
-  section           Section?        @relation(fields: [sectionId], references: [id], onDelete: SetNull)
-  
-  createdSousLocalites  SousLocalite[]    @relation("CreatedBy")
-  createdSections       Section[]         @relation("CreatedBy")
-  createdTypes          RencontreType[]   @relation("TypeCreatedBy")
-  createdRencontres     Rencontre[]       @relation("CreatedBy")
-  updatedRencontres     Rencontre[]       @relation("UpdatedBy")
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  passwordHash        String    @map("password_hash")
+  role                UserRole
+  name                String
+  sousLocaliteId      String?   @map("sous_localite_id")
+  sectionId           String?   @map("section_id")
+  refreshToken        String?   @map("refresh_token")
+  failedLoginAttempts Int       @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime? @map("locked_until")
+  mustChangePassword  Boolean   @default(false) @map("must_change_password")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  sousLocalite SousLocalite? @relation(fields: [sousLocaliteId], references: [id], onDelete: SetNull)
+  section      Section?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  createdSousLocalites SousLocalite[]  @relation("CreatedBy")
+  createdSections      Section[]       @relation("CreatedBy")
+  createdTypes         RencontreType[] @relation("TypeCreatedBy")
+  createdRencontres    Rencontre[]     @relation("CreatedBy")
+  updatedRencontres    Rencontre[]     @relation("UpdatedBy")
 
   @@map("users")
 }
 
 model Localite {
-  id              String          @id @default(uuid())
-  name            String          @unique
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-  
-  sousLocalites   SousLocalite[]
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sousLocalites SousLocalite[]
 
   @@map("localites")
 }
 
 model SousLocalite {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
-  localiteId  String    @map("localite_id")
-  createdById String    @map("created_by")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  
-  localite    Localite  @relation(fields: [localiteId], references: [id], onDelete: Cascade)
-  createdBy   User      @relation("CreatedBy", fields: [createdById], references: [id])
-  sections    Section[]
-  users       User[]
+  localiteId  String   @map("localite_id")
+  createdById String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  localite  Localite  @relation(fields: [localiteId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("CreatedBy", fields: [createdById], references: [id])
+  sections  Section[]
+  users     User[]
 
   @@map("sous_localites")
 }
 
 model Section {
-  id              String        @id @default(uuid())
-  name            String
-  sousLocaliteId  String        @map("sous_localite_id")
-  createdById     String        @map("created_by")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-  
-  sousLocalite    SousLocalite  @relation(fields: [sousLocaliteId], references: [id], onDelete: Cascade)
-  createdBy       User          @relation("CreatedBy", fields: [createdById], references: [id])
-  rencontres      Rencontre[]
-  users           User[]
-  membres         Membre[]
+  id             String   @id @default(uuid())
+  name           String
+  sousLocaliteId String   @map("sous_localite_id")
+  createdById    String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  sousLocalite SousLocalite @relation(fields: [sousLocaliteId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("CreatedBy", fields: [createdById], references: [id])
+  rencontres   Rencontre[]
+  users        User[]
+  membres      Membre[]
+  binomeCycles BinomeCycle[]
 
   @@map("sections")
 }
 
 model Membre {
-  id              String    @id @default(uuid())
-  sectionId       String    @map("section_id")
-  photo           String?
-  prenom          String
-  nom             String
-  genre           String?
-  fonction        String?
-  corpsMetier     String?   @map("corps_metier")
-  groupeSanguin   String?   @map("groupe_sanguin")
-  telephone       String?
-  numeroCNI       String?   @map("numero_cni")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  
-  section         Section   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  id                  String    @id @default(uuid())
+  sectionId           String    @map("section_id")
+  photo               String?
+  prenom              String
+  nom                 String
+  genre               String?
+  fonction            String?
+  corpsMetier         String?   @map("corps_metier")
+  groupeSanguin       String?   @map("groupe_sanguin")
+  telephone           String?
+  numeroCNI           String?   @map("numero_cni")
+  adresse             String?
+  dateNaissance       DateTime? @map("date_naissance")
+  numeroCarteElecteur String?   @map("numero_carte_electeur")
+  lieuVote            String?   @map("lieu_vote")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  section        Section     @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  rencontresLieu Rencontre[] @relation("RencontreLieuMembre")
+  binomePairsA   BinomePair[] @relation("BinomePairMembreA")
+  binomePairsB   BinomePair[] @relation("BinomePairMembreB")
 
   @@map("membres")
 }
 
 model RencontreType {
-  id          String      @id @default(uuid())
-  name        String      @unique
-  isReunion   Boolean     @default(false) @map("is_reunion")
-  createdById String?     @map("created_by")
-  scopeType   ScopeType?  @map("scope_type")
-  scopeId     String?     @map("scope_id")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  
-  createdBy   User?       @relation("TypeCreatedBy", fields: [createdById], references: [id])
-  rencontres  Rencontre[]
+  id           String     @id @default(uuid())
+  name         String     @unique
+  isReunion    Boolean    @default(false) @map("is_reunion")
+  createdById  String?    @map("created_by")
+  scopeType    ScopeType? @map("scope_type")
+  scopeId      String?    @map("scope_id")
+  trancheAgeId String?    @map("tranche_age_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  createdBy  User?       @relation("TypeCreatedBy", fields: [createdById], references: [id])
+  trancheAge TrancheAge? @relation(fields: [trancheAgeId], references: [id], onDelete: SetNull)
+  rencontres Rencontre[]
 
   @@index([scopeType, scopeId])
+  @@index([trancheAgeId])
   @@map("rencontre_types")
 }
 
+model TrancheAge {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  ageMin    Int      @map("age_min")
+  ageMax    Int?     @map("age_max")
+  order     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  types RencontreType[]
+  binomePairs BinomePair[]
+
+  @@index([order])
+  @@map("tranches_age")
+}
+
 model Rencontre {
-  id              String        @id @default(uuid())
-  typeId          String        @map("type_id")
-  sectionId       String        @map("section_id")
-  scopeType       ScopeType     @map("scope_type")
-  scopeId         String        @map("scope_id")
-  date            DateTime      @db.Date
-  heureDebut      String        @map("heure_debut")
-  heureFin        String        @map("heure_fin")
+  id              String    @id @default(uuid())
+  typeId          String    @map("type_id")
+  sectionId       String    @map("section_id")
+  scopeType       ScopeType @map("scope_type")
+  scopeId         String    @map("scope_id")
+  lieuMembreId    String?   @map("lieu_membre_id")
+  lieuTexte       String?   @map("lieu_texte")
+  date            DateTime  @db.Date
+  heureDebut      String    @map("heure_debut")
+  heureFin        String    @map("heure_fin")
   moderateur      String
   moniteur        String
   theme           String?
-  ordreDuJour     Json?         @map("ordre_du_jour")
-  developpement   String?       @db.Text
-  pvReunion       String?       @map("pv_reunion") @db.Text
-  membresPresents Json?         @map("membres_presents")
-  presenceHomme   Int           @default(0) @map("presence_homme")
-  presenceFemme   Int           @default(0) @map("presence_femme")
-  presenceTotale  Int           @default(0) @map("presence_totale")
-  observations    String?       @db.Text
+  ordreDuJour     Json?     @map("ordre_du_jour")
+  developpement   String?   @db.Text
+  pvReunion       String?   @map("pv_reunion") @db.Text
+  membresPresents Json?     @map("membres_presents")
+  presenceHomme   Int       @default(0) @map("presence_homme")
+  presenceFemme   Int       @default(0) @map("presence_femme")
+  presenceTotale  Int       @default(0) @map("presence_totale")
+  observations    String?   @db.Text
   attachments     Json?
-  createdById     String        @map("created_by")
-  updatedById     String?       @map("updated_by")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-  
-  type            RencontreType @relation(fields: [typeId], references: [id])
-  section         Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  createdBy       User          @relation("CreatedBy", fields: [createdById], references: [id])
-  updatedBy       User?         @relation("UpdatedBy", fields: [updatedById], references: [id])
+  createdById     String    @map("created_by")
+  updatedById     String?   @map("updated_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  type       RencontreType @relation(fields: [typeId], references: [id])
+  section    Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  lieuMembre Membre?       @relation("RencontreLieuMembre", fields: [lieuMembreId], references: [id], onDelete: SetNull)
+  createdBy  User          @relation("CreatedBy", fields: [createdById], references: [id])
+  updatedBy  User?         @relation("UpdatedBy", fields: [updatedById], references: [id])
 
   @@index([sectionId])
   @@index([typeId])
   @@index([date])
   @@index([scopeType, scopeId])
+  @@index([lieuMembreId])
   @@map("rencontres")
+}
+
+model BinomeCycle {
+  id        String   @id @default(uuid())
+  sectionId String   @map("section_id")
+  startedAt DateTime @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  section Section     @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  pairs   BinomePair[]
+
+  @@index([sectionId])
+  @@index([isActive])
+  @@map("binome_cycles")
+}
+
+model BinomePair {
+  id           String   @id @default(uuid())
+  cycleId      String   @map("cycle_id")
+  trancheAgeId String   @map("tranche_age_id")
+  genre        String
+  membreAId    String   @map("membre_a_id")
+  membreBId    String   @map("membre_b_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  cycle     BinomeCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  trancheAge TrancheAge @relation(fields: [trancheAgeId], references: [id], onDelete: Cascade)
+  membreA   Membre      @relation("BinomePairMembreA", fields: [membreAId], references: [id], onDelete: Cascade)
+  membreB   Membre      @relation("BinomePairMembreB", fields: [membreBId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId])
+  @@index([trancheAgeId])
+  @@index([genre])
+  @@unique([cycleId, trancheAgeId, genre, membreAId])
+  @@unique([cycleId, trancheAgeId, genre, membreBId])
+  @@map("binome_pairs")
 }

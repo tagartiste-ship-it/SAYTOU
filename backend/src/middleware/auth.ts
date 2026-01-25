@@ -32,8 +32,19 @@ export const authenticate = (
 
     req.user = decoded;
     next();
-  } catch (error) {
-    res.status(401).json({ error: 'Token invalide ou expiré' });
+  } catch (error: any) {
+    // eslint-disable-next-line no-console
+    console.error('Auth error:', {
+      name: error?.name,
+      message: error?.message,
+    });
+
+    const isDev = process.env.NODE_ENV !== 'production';
+    res.status(401).json(
+      isDev
+        ? { error: 'Token invalide ou expiré', details: error?.name, message: error?.message }
+        : { error: 'Token invalide ou expiré' }
+    );
   }
 };
 

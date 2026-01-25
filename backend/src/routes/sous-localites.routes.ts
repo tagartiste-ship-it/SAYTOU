@@ -83,6 +83,7 @@ router.post(
               name: adminName,
               role: 'SOUS_LOCALITE_ADMIN',
               sousLocaliteId: sousLocalite.id,
+              mustChangePassword: true,
             },
           });
 

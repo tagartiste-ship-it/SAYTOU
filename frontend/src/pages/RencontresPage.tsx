@@ -285,7 +285,7 @@ export default function RencontresPage() {
                         {rencontre.theme || 'Sans thème'}
                       </h3>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                         <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                           <Calendar className="w-4 h-4" />
                           {format(new Date(rencontre.date), 'dd MMMM yyyy', { locale: fr })}
@@ -293,6 +293,12 @@ export default function RencontresPage() {
                         <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                           <Users className="w-4 h-4" />
                           <Badge variant="success" className="ml-1">{rencontre.presenceTotale}</Badge> présents
+                        </div>
+                        <div className="text-gray-600 dark:text-gray-400">
+                          <span className="font-medium">Lieu:</span>{' '}
+                          {rencontre.lieuMembre
+                            ? `${rencontre.lieuMembre.prenom} ${rencontre.lieuMembre.nom}${rencontre.lieuTexte ? ` (${rencontre.lieuTexte})` : ''}`
+                            : (rencontre.lieuTexte || '—')}
                         </div>
                         <div className="text-gray-600 dark:text-gray-400">
                           <span className="font-medium">Modérateur:</span> {rencontre.moderateur}
