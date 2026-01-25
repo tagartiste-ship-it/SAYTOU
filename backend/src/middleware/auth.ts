@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/jwt.js';
 
-export interface AuthRequest extends Request {
+export type AuthRequest = Request & {
   user?: {
     userId: string;
     email: string;
@@ -9,10 +9,7 @@ export interface AuthRequest extends Request {
     sectionId?: string | null;
     sousLocaliteId?: string | null;
   };
-  body: any;
-  params: any;
-  query: any;
-}
+};
 
 export const authenticate = (
   req: AuthRequest,
