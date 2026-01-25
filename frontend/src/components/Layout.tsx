@@ -201,7 +201,7 @@ export default function Layout() {
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed inset-y-0 left-0 w-64 bg-white dark:bg-gray-900 shadow-xl"
             >
-              <div className="flex h-full flex-col">
+              <div className="flex h-full flex-col min-h-0">
               <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-800 px-6 py-4">
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">SAYTOU</h1>
                 <button
@@ -211,7 +211,7 @@ export default function Layout() {
                   <X className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                 </button>
               </div>
-              <nav className="flex-1 space-y-1 px-3 py-4">
+              <nav className="flex-1 min-h-0 overflow-y-auto space-y-1 px-3 py-4">
                 {navigation.map((item) => (
                   <Link
                     key={item.name}
@@ -344,7 +344,7 @@ export default function Layout() {
         </header>
 
         {/* Page content */}
-        <main ref={mainRef} id="app-scroll-container" className="flex-1 overflow-y-auto overscroll-none bg-gray-50 dark:bg-gray-950 p-4 lg:p-8">
+        <main ref={mainRef} id="app-scroll-container" className="flex-1 overflow-y-auto overscroll-none bg-gray-50 dark:bg-gray-950 p-4 pb-24 lg:p-8 lg:pb-8">
           <Outlet />
         </main>
       </div>

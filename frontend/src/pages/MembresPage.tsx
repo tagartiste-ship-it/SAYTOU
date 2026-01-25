@@ -49,7 +49,7 @@ export default function MembresPage() {
     telephone: '',
     numeroCNI: '',
     adresse: '',
-    dateNaissance: '',
+    ageTranche: '',
     numeroCarteElecteur: '',
     lieuVote: ''
   });
@@ -214,7 +214,7 @@ export default function MembresPage() {
       telephone: '',
       numeroCNI: '',
       adresse: '',
-      dateNaissance: '',
+      ageTranche: '',
       numeroCarteElecteur: '',
       lieuVote: ''
     });
@@ -222,7 +222,6 @@ export default function MembresPage() {
 
   const handleEdit = (membre: Membre) => {
     setEditingId(membre.id);
-    const dateNaissance = membre.dateNaissance ? String(membre.dateNaissance).slice(0, 10) : '';
     setFormData({
       photo: membre.photo || '',
       prenom: membre.prenom,
@@ -234,7 +233,7 @@ export default function MembresPage() {
       telephone: membre.telephone || '',
       numeroCNI: membre.numeroCNI || '',
       adresse: membre.adresse || '',
-      dateNaissance,
+      ageTranche: membre.ageTranche || '',
       numeroCarteElecteur: membre.numeroCarteElecteur || '',
       lieuVote: membre.lieuVote || ''
     });
@@ -255,7 +254,7 @@ export default function MembresPage() {
       telephone: '',
       numeroCNI: '',
       adresse: '',
-      dateNaissance: '',
+      ageTranche: '',
       numeroCarteElecteur: '',
       lieuVote: ''
     });
@@ -267,8 +266,8 @@ export default function MembresPage() {
       return;
     }
 
-    if (!formData.dateNaissance) {
-      toast.error('La date de naissance est requise');
+    if (!formData.ageTranche) {
+      toast.error("La tranche d'âge est requise");
       return;
     }
 
@@ -478,7 +477,6 @@ export default function MembresPage() {
                 <option value="">Tous</option>
                 <option value="VOTANT">Votants (18+ avec n° électeur)</option>
                 <option value="NON_VOTANT">Non votants (18+ sans n° électeur)</option>
-                <option value="PRIMO">Primo-votants (18 ans)</option>
               </select>
             </div>
           </div>
@@ -650,13 +648,18 @@ export default function MembresPage() {
                       />
                     </div>
                     <div>
-                      <label className="label text-gray-700 dark:text-gray-300">Date de naissance *</label>
-                      <Input
-                        type="date"
-                        value={formData.dateNaissance}
-                        onChange={(e) => setFormData({ ...formData, dateNaissance: e.target.value })}
+                      <label className="label text-gray-700 dark:text-gray-300">Tranche d'âge *</label>
+                      <select
+                        value={formData.ageTranche}
+                        onChange={(e) => setFormData({ ...formData, ageTranche: e.target.value })}
+                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
                         required
-                      />
+                      >
+                        <option value="">-</option>
+                        <option value="S1">S1</option>
+                        <option value="S2">S2</option>
+                        <option value="S3">S3</option>
+                      </select>
                     </div>
                     <div>
                       <label className="label text-gray-700 dark:text-gray-300">N° carte électeur</label>
@@ -853,13 +856,18 @@ export default function MembresPage() {
                           />
                         </div>
                         <div>
-                          <label className="label text-gray-700 dark:text-gray-300">Date de naissance *</label>
-                          <Input
-                            type="date"
-                            value={formData.dateNaissance}
-                            onChange={(e) => setFormData({ ...formData, dateNaissance: e.target.value })}
+                          <label className="label text-gray-700 dark:text-gray-300">Tranche d'âge *</label>
+                          <select
+                            value={formData.ageTranche}
+                            onChange={(e) => setFormData({ ...formData, ageTranche: e.target.value })}
+                            className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
                             required
-                          />
+                          >
+                            <option value="">-</option>
+                            <option value="S1">S1</option>
+                            <option value="S2">S2</option>
+                            <option value="S3">S3</option>
+                          </select>
                         </div>
                         <div>
                           <label className="label text-gray-700 dark:text-gray-300">N° carte électeur</label>
@@ -1109,12 +1117,17 @@ export default function MembresPage() {
                           />
                         </div>
                         <div>
-                          <label className="label text-gray-700 dark:text-gray-300">Date de naissance</label>
-                          <Input
-                            type="date"
-                            value={formData.dateNaissance}
-                            onChange={(e) => setFormData({ ...formData, dateNaissance: e.target.value })}
-                          />
+                          <label className="label text-gray-700 dark:text-gray-300">Tranche d'âge</label>
+                          <select
+                            value={formData.ageTranche}
+                            onChange={(e) => setFormData({ ...formData, ageTranche: e.target.value })}
+                            className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                          >
+                            <option value="">-</option>
+                            <option value="S1">S1</option>
+                            <option value="S2">S2</option>
+                            <option value="S3">S3</option>
+                          </select>
                         </div>
                         <div>
                           <label className="label text-gray-700 dark:text-gray-300">N° carte électeur</label>
@@ -1363,12 +1376,17 @@ export default function MembresPage() {
                           />
                         </div>
                         <div>
-                          <label className="label text-gray-700 dark:text-gray-300">Date de naissance</label>
-                          <Input
-                            type="date"
-                            value={formData.dateNaissance}
-                            onChange={(e) => setFormData({ ...formData, dateNaissance: e.target.value })}
-                          />
+                          <label className="label text-gray-700 dark:text-gray-300">Tranche d'âge</label>
+                          <select
+                            value={formData.ageTranche}
+                            onChange={(e) => setFormData({ ...formData, ageTranche: e.target.value })}
+                            className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                          >
+                            <option value="">-</option>
+                            <option value="S1">S1</option>
+                            <option value="S2">S2</option>
+                            <option value="S3">S3</option>
+                          </select>
                         </div>
                         <div>
                           <label className="label text-gray-700 dark:text-gray-300">N° carte électeur</label>

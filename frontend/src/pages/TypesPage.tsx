@@ -288,7 +288,7 @@ export default function TypesPage() {
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white dark:bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-2xl"
+              className="bg-white dark:bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">

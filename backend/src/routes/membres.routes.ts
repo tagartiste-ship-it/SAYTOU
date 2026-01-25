@@ -8,6 +8,12 @@ const prisma: any = prismaRaw;
 
 type AgeTranche = 'S1' | 'S2' | 'S3' | null;
 
+const normalizeAgeTranche = (value: unknown): AgeTranche => {
+  const v = String(value ?? '').trim().toUpperCase();
+  if (v === 'S1' || v === 'S2' || v === 'S3') return v as AgeTranche;
+  return null;
+};
+
 const computeAge = (dateNaissance?: Date | null): number | null => {
   if (!dateNaissance) return null;
   const d = new Date(dateNaissance);
@@ -258,10 +264,6 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       } else if (statutElecteur === 'NON_VOTANT') {
         whereAnd.push({ dateNaissance: { lte: date18 } });
         whereAnd.push({ OR: [{ numeroCarteElecteur: null }, { numeroCarteElecteur: '' }] });
-      } else if (statutElecteur === 'PRIMO') {
-        // Approximation: age 18 -> dateNaissance in (now-19y, now-18y]
-        whereAnd.push({ dateNaissance: { gt: date19 } });
-        whereAnd.push({ dateNaissance: { lte: date18 } });
       }
     }
 
@@ -289,11 +291,11 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     const membresEnrichis = membres.map((m: any) => {
       const age = computeAge(m.dateNaissance);
-      const ageTranche = computeAgeTranche(age);
+      const ageTranche = normalizeAgeTranche(m.ageTranche) ?? computeAgeTranche(age);
       return {
         ...m,
         age,
-        isEligibleToVote: age !== null ? age >= 18 : false,
+        isEligibleToVote: age !== null ? age >= 18 : ageTranche === 'S3',
         ageTranche,
       };
     });
@@ -313,10 +315,13 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-// Créer un nouveau membre
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user;
+    if (!user) {
+      return res.status(401).json({ error: 'Non authentifié' });
+    }
+
     const {
       sectionId,
       photo,
@@ -330,17 +335,13 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       numeroCNI,
       adresse,
       dateNaissance,
+      ageTranche,
       numeroCarteElecteur,
       lieuVote,
     } = req.body;
-    
-    // Validation
+
     if (!prenom || !nom) {
       return res.status(400).json({ error: 'Le prénom et le nom sont requis' });
-    }
-
-    if (!dateNaissance) {
-      return res.status(400).json({ error: 'dateNaissance requise' });
     }
 
     const numElecteur = String(numeroCarteElecteur ?? '').trim();
@@ -348,8 +349,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     if (numElecteur && !lieu) {
       return res.status(400).json({ error: 'Lieu de vote requis si le numéro de carte électeur est renseigné' });
     }
-    
-    // Vérifier les permissions
+
     let finalSectionId = sectionId;
     if (user.role === 'SECTION_USER') {
       if (!user.sectionId) {
@@ -359,10 +359,16 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     } else if (!sectionId) {
       return res.status(400).json({ error: 'Section requise' });
     }
-    
+
+    const normalizedAgeTranche = normalizeAgeTranche(ageTranche);
+
     const dateNaissanceValue = dateNaissance ? new Date(String(dateNaissance)) : null;
     if (dateNaissance && Number.isNaN(dateNaissanceValue?.getTime())) {
       return res.status(400).json({ error: 'dateNaissance invalide' });
+    }
+
+    if (!dateNaissanceValue && !normalizedAgeTranche) {
+      return res.status(400).json({ error: "ageTranche requise (S1, S2 ou S3)" });
     }
 
     const membre = await prisma.membre.create({
@@ -379,6 +385,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         numeroCNI,
         adresse,
         dateNaissance: dateNaissanceValue,
+        ageTranche: normalizedAgeTranche,
         numeroCarteElecteur,
         lieuVote,
       },
@@ -386,20 +393,21 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         section: {
           select: {
             id: true,
-            name: true
-          }
-        }
-      }
+            name: true,
+          },
+        },
+      },
     });
-    
+
     const age = computeAge(membre.dateNaissance);
-    const ageTranche = computeAgeTranche(age);
+    const computedTranche = computeAgeTranche(age);
+    const finalTranche = normalizeAgeTranche(membre.ageTranche) ?? computedTranche;
     res.status(201).json({
       membre: {
         ...membre,
         age,
-        isEligibleToVote: age !== null ? age >= 18 : false,
-        ageTranche,
+        isEligibleToVote: age !== null ? age >= 18 : finalTranche === 'S3',
+        ageTranche: finalTranche,
       },
     });
   } catch (error: any) {
@@ -424,6 +432,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       numeroCNI,
       adresse,
       dateNaissance,
+      ageTranche,
       numeroCarteElecteur,
       lieuVote,
     } = req.body;
@@ -433,13 +442,15 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Le prénom et le nom sont requis' });
     }
 
-    if (!dateNaissance) {
-      return res.status(400).json({ error: 'dateNaissance requise' });
-    }
-    
+    const normalizedAgeTranche = normalizeAgeTranche(ageTranche);
+
     const dateNaissanceValue = dateNaissance ? new Date(String(dateNaissance)) : null;
     if (dateNaissance && Number.isNaN(dateNaissanceValue?.getTime())) {
       return res.status(400).json({ error: 'dateNaissance invalide' });
+    }
+
+    if (!dateNaissanceValue && !normalizedAgeTranche) {
+      return res.status(400).json({ error: "ageTranche requise (S1, S2 ou S3)" });
     }
 
     const membre = await prisma.membre.update({
@@ -456,6 +467,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         numeroCNI,
         adresse,
         dateNaissance: dateNaissanceValue,
+        ageTranche: normalizedAgeTranche,
         numeroCarteElecteur: numeroCarteElecteur === undefined ? undefined : numeroCarteElecteur,
         lieuVote: lieuVote === undefined ? undefined : lieuVote,
       },
@@ -470,13 +482,14 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     });
     
     const age = computeAge(membre.dateNaissance);
-    const ageTranche = computeAgeTranche(age);
+    const computedTranche = computeAgeTranche(age);
+    const finalTranche = normalizeAgeTranche(membre.ageTranche) ?? computedTranche;
     res.json({
       membre: {
         ...membre,
         age,
-        isEligibleToVote: age !== null ? age >= 18 : false,
-        ageTranche,
+        isEligibleToVote: age !== null ? age >= 18 : finalTranche === 'S3',
+        ageTranche: finalTranche,
       },
     });
   } catch (error: any) {

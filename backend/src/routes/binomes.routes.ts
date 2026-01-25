@@ -56,7 +56,19 @@ const getEffectiveSectionId = async (req: AuthRequest): Promise<string | null> =
   return sectionId || null;
 };
 
-const computeMemberTranche = async (member: { dateNaissance: Date | null }) => {
+const normalizeMemberAgeTrancheName = (value: unknown) => {
+  const v = String(value ?? '').trim().toUpperCase();
+  if (v === 'S1' || v === 'S2' || v === 'S3') return v;
+  return null;
+};
+
+const computeMemberTranche = async (member: { dateNaissance: Date | null; ageTranche?: string | null }) => {
+  const trancheName = normalizeMemberAgeTrancheName(member.ageTranche);
+  if (trancheName) {
+    const found = await prisma.trancheAge.findUnique({ where: { name: trancheName }, select: { id: true } });
+    return found?.id ?? null;
+  }
+
   if (!member.dateNaissance) return null;
 
   const now = new Date();
@@ -239,12 +251,12 @@ const buildReport = async (sectionId: string) => {
 
   const members = await prisma.membre.findMany({
     where: { sectionId },
-    select: { id: true, prenom: true, nom: true, genre: true, dateNaissance: true },
+    select: { id: true, prenom: true, nom: true, genre: true, dateNaissance: true, ageTranche: true },
   });
 
   const solos: any[] = [];
   for (const m of members) {
-    const trancheAgeId = await computeMemberTranche({ dateNaissance: m.dateNaissance });
+    const trancheAgeId = await computeMemberTranche({ dateNaissance: m.dateNaissance, ageTranche: (m as any).ageTranche });
     const genre = normalizeGenre(m.genre);
     if (!trancheAgeId || !genre) continue;
     if (pairedMemberIds.has(m.id)) continue;
@@ -324,14 +336,14 @@ const rotateForSection = async (sectionId: string, opts?: { avoidPairsMonths?: n
 
   const members = await prisma.membre.findMany({
     where: { sectionId },
-    select: { id: true, genre: true, dateNaissance: true },
+    select: { id: true, genre: true, dateNaissance: true, ageTranche: true },
   });
 
   const enriched: { id: string; trancheAgeId: string | null; genre: string | null }[] = [];
   for (const m of members) {
     enriched.push({
       id: m.id,
-      trancheAgeId: await computeMemberTranche({ dateNaissance: m.dateNaissance }),
+      trancheAgeId: await computeMemberTranche({ dateNaissance: m.dateNaissance, ageTranche: (m as any).ageTranche }),
       genre: normalizeGenre(m.genre),
     });
   }
@@ -512,7 +524,7 @@ router.post('/generate', authenticate, async (req: AuthRequest, res: Response): 
 
     const members = await prisma.membre.findMany({
       where: { sectionId },
-      select: { id: true, genre: true, dateNaissance: true, prenom: true, nom: true },
+      select: { id: true, genre: true, dateNaissance: true, ageTranche: true, prenom: true, nom: true },
     });
 
     const trancheCache = new Map<string, string | null>();
@@ -521,7 +533,7 @@ router.post('/generate', authenticate, async (req: AuthRequest, res: Response): 
     for (const m of members) {
       const g = normalizeGenre(m.genre);
       let trancheId = trancheCache.get(m.id) ?? null;
-      trancheId = await computeMemberTranche({ dateNaissance: m.dateNaissance });
+      trancheId = await computeMemberTranche({ dateNaissance: m.dateNaissance, ageTranche: (m as any).ageTranche });
       trancheCache.set(m.id, trancheId);
       enriched.push({ id: m.id, trancheAgeId: trancheId, genre: g });
     }
@@ -598,14 +610,14 @@ router.post('/rotate', authenticate, async (req: AuthRequest, res: Response): Pr
 
     const members = await prisma.membre.findMany({
       where: { sectionId },
-      select: { id: true, genre: true, dateNaissance: true },
+      select: { id: true, genre: true, dateNaissance: true, ageTranche: true },
     });
 
     const enriched: { id: string; trancheAgeId: string | null; genre: string | null }[] = [];
     for (const m of members) {
       enriched.push({
         id: m.id,
-        trancheAgeId: await computeMemberTranche({ dateNaissance: m.dateNaissance }),
+        trancheAgeId: await computeMemberTranche({ dateNaissance: m.dateNaissance, ageTranche: (m as any).ageTranche }),
         genre: normalizeGenre(m.genre),
       });
     }

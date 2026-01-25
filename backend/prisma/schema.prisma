@@ -108,6 +108,7 @@ model Membre {
   numeroCNI           String?   @map("numero_cni")
   adresse             String?
   dateNaissance       DateTime? @map("date_naissance")
+  ageTranche           String?   @map("age_tranche")
   numeroCarteElecteur String?   @map("numero_carte_electeur")
   lieuVote            String?   @map("lieu_vote")
   createdAt           DateTime  @default(now()) @map("created_at")
