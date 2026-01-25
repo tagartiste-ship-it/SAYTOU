@@ -39,6 +39,7 @@ const canManageType = async (req: AuthRequest, type: { scopeType: ScopeType; sco
   }
 
   if (role === 'SECTION_USER') {
+    if (type.scopeType == null) return true;
     return type.scopeType === 'SECTION' && !!type.scopeId && type.scopeId === scopeId;
   }
 
