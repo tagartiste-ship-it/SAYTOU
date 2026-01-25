@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit, Trash2, Tag, X } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
-import type { RencontreType, TrancheAge } from '../lib/types';
+import type { Rencontre, RencontreType, TrancheAge } from '../lib/types';
 import { useAuthStore } from '../store/authStore';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -12,6 +13,7 @@ import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
 
 export default function TypesPage() {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const [types, setTypes] = useState<RencontreType[]>([]);
   const [tranchesAge, setTranchesAge] = useState<TrancheAge[]>([]);
@@ -24,6 +26,12 @@ export default function TypesPage() {
     isReunion: false,
     trancheAgeId: '',
   });
+
+  const [showUsedModal, setShowUsedModal] = useState(false);
+  const [usedModalTypeId, setUsedModalTypeId] = useState<string | null>(null);
+  const [usedModalTypeName, setUsedModalTypeName] = useState<string>('');
+  const [usedRencontres, setUsedRencontres] = useState<Rencontre[]>([]);
+  const [isLoadingUsedRencontres, setIsLoadingUsedRencontres] = useState(false);
   const draftKey = `saytou:draft:types:${user?.id ?? 'anon'}`;
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
 
@@ -152,6 +160,28 @@ export default function TypesPage() {
     } catch (error: any) {
       const errorMsg = error?.response?.data?.error || error?.message || 'Erreur lors de la suppression';
       toast.error(errorMsg);
+
+      if (/utilisé par/i.test(String(errorMsg))) {
+        const t = types.find((x) => x.id === id);
+        setUsedModalTypeId(id);
+        setUsedModalTypeName(t?.name ?? '');
+        setShowUsedModal(true);
+
+        try {
+          setIsLoadingUsedRencontres(true);
+          const params = new URLSearchParams();
+          params.append('typeId', id);
+          params.append('limit', '100');
+          const resp = await api.get<{ rencontres: Rencontre[] }>(`/rencontres?${params.toString()}`);
+          setUsedRencontres(resp.data.rencontres || []);
+        } catch (listError: any) {
+          const listMsg = listError?.response?.data?.error || listError?.message || 'Erreur lors du chargement des rencontres';
+          toast.error(listMsg);
+          setUsedRencontres([]);
+        } finally {
+          setIsLoadingUsedRencontres(false);
+        }
+      }
     }
   };
 
@@ -370,6 +400,111 @@ export default function TypesPage() {
                   </Button>
                 </div>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showUsedModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onClick={() => {
+              setShowUsedModal(false);
+              setUsedModalTypeId(null);
+              setUsedModalTypeName('');
+              setUsedRencontres([]);
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-gray-900 rounded-xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Rencontres liées au type</h2>
+                <motion.button
+                  whileHover={{ scale: 1.1, rotate: 90 }}
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    setShowUsedModal(false);
+                    setUsedModalTypeId(null);
+                    setUsedModalTypeName('');
+                    setUsedRencontres([]);
+                  }}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                </motion.button>
+              </div>
+
+              <div className="text-sm text-gray-700 dark:text-gray-300">
+                {usedModalTypeName ? (
+                  <div className="font-medium">Type : {usedModalTypeName}</div>
+                ) : null}
+                <div className="mt-1">Ce type est utilisé par des rencontres. Modifie ces rencontres (ou change leur type) puis réessaie la suppression.</div>
+              </div>
+
+              <div className="mt-4">
+                {isLoadingUsedRencontres ? (
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Chargement...</div>
+                ) : usedRencontres.length === 0 ? (
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Aucune rencontre trouvée.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {usedRencontres.map((r) => (
+                      <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 dark:border-gray-800 p-3">
+                        <div className="min-w-0">
+                          <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{r.type?.name ?? 'Rencontre'}</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-400">
+                            {new Date(r.date).toLocaleDateString('fr-FR')} {r.heureDebut ? `• ${r.heureDebut}` : ''}
+                            {r.theme ? ` • ${r.theme}` : ''}
+                          </div>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setShowUsedModal(false);
+                              navigate(`/rencontres/${r.id}/edit`);
+                            }}
+                          >
+                            Modifier
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-5 flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowUsedModal(false);
+                    setUsedModalTypeId(null);
+                    setUsedModalTypeName('');
+                    setUsedRencontres([]);
+                  }}
+                >
+                  Fermer
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!usedModalTypeId) return;
+                    setShowUsedModal(false);
+                    void handleDelete(usedModalTypeId);
+                  }}
+                >
+                  Réessayer suppression
+                </Button>
+              </div>
             </motion.div>
           </motion.div>
         )}
