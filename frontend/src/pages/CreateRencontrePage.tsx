@@ -15,6 +15,12 @@ export default function CreateRencontrePage() {
   const { user } = useAuthStore();
 
   useEffect(() => {
+    if (user?.role !== 'SECTION_USER') return;
+    if (!user.sectionId) return;
+    setFormData((prev) => (prev.sectionId ? prev : { ...prev, sectionId: user.sectionId || '' }));
+  }, [user?.role, user?.sectionId]);
+
+  useEffect(() => {
     const onError = (event: ErrorEvent) => {
       const message = event.error?.message || event.message || 'Erreur inconnue';
       // eslint-disable-next-line no-console

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { useAuthStore } from './store/authStore';
@@ -28,6 +28,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 function App() {
   const { isAuthenticated, fetchMe, logout } = useAuthStore();
 
+  const lastFetchMeAtRef = useRef<number>(0);
+
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
     if (token) {
@@ -39,6 +41,78 @@ function App() {
       logout();
     }
   }, [isAuthenticated, fetchMe, logout]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const IDLE_MS = 10 * 60 * 1000;
+    const STORAGE_KEY = 'saytou:lastActivityAt';
+
+    const markActivity = () => {
+      try {
+        localStorage.setItem(STORAGE_KEY, String(Date.now()));
+      } catch {
+      }
+    };
+
+    const checkIdle = async () => {
+      const token = localStorage.getItem('accessToken');
+      if (!token) return;
+
+      let last = Date.now();
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw && !Number.isNaN(Number(raw))) last = Number(raw);
+      } catch {
+      }
+
+      if (Date.now() - last >= IDLE_MS) {
+        await logout();
+        return;
+      }
+    };
+
+    const maybeRefetchMe = () => {
+      const token = localStorage.getItem('accessToken');
+      if (!token) return;
+      const now = Date.now();
+      if (now - lastFetchMeAtRef.current < 30_000) return;
+      lastFetchMeAtRef.current = now;
+      fetchMe();
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void checkIdle().then(() => {
+          if (localStorage.getItem('accessToken')) maybeRefetchMe();
+        });
+      }
+    };
+
+    const onFocus = () => {
+      void checkIdle().then(() => {
+        if (localStorage.getItem('accessToken')) maybeRefetchMe();
+      });
+    };
+
+    markActivity();
+
+    const events: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
+    for (const e of events) window.addEventListener(e, markActivity, { passive: true });
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onFocus);
+
+    const interval = window.setInterval(() => {
+      void checkIdle();
+    }, 30_000);
+
+    return () => {
+      for (const e of events) window.removeEventListener(e, markActivity);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(interval);
+    };
+  }, [fetchMe, isAuthenticated, logout]);
 
   return (
     <>
