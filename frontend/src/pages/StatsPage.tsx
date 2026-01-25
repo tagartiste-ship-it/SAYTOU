@@ -15,12 +15,14 @@ export default function StatsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
   const [selectedSection, setSelectedSection] = useState('');
+  const [dateDebut, setDateDebut] = useState('');
+  const [dateFin, setDateFin] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSection]);
+  }, [selectedSection, dateDebut, dateFin]);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -31,19 +33,23 @@ export default function StatsPage() {
         setSections(sectionsRes.data.sections || []);
       }
 
+      const params: Record<string, string> = {};
+      if (dateDebut) params.dateDebut = dateDebut;
+      if (dateFin) params.dateFin = dateFin;
+
       // Charger les statistiques selon le rôle
       let statsRes;
       if (user?.role === 'SECTION_USER' && user.sectionId) {
-        statsRes = await api.get(`/stats/section/${user.sectionId}`);
+        statsRes = await api.get(`/stats/section/${user.sectionId}`, { params });
         setStats(statsRes.data.statistiques);
       } else if (selectedSection) {
-        statsRes = await api.get(`/stats/section/${selectedSection}`);
+        statsRes = await api.get(`/stats/section/${selectedSection}`, { params });
         setStats(statsRes.data.statistiques);
       } else if (user?.role === 'SOUS_LOCALITE_ADMIN' && user.sousLocaliteId) {
-        statsRes = await api.get(`/stats/sous-localite/${user.sousLocaliteId}`);
+        statsRes = await api.get(`/stats/sous-localite/${user.sousLocaliteId}`, { params });
         setStats(statsRes.data.statistiques);
       } else if (user?.role === 'LOCALITE') {
-        statsRes = await api.get('/stats/global');
+        statsRes = await api.get('/stats/global', { params });
         setStats(statsRes.data.statistiques);
       }
     } catch (error: any) {
@@ -269,18 +275,40 @@ export default function StatsPage() {
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Statistiques</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">Visualisez vos données en temps réel</p>
         </div>
-        {user?.role !== 'SECTION_USER' && (
-          <select 
-            value={selectedSection} 
-            onChange={(e) => setSelectedSection(e.target.value)} 
-            className="flex h-11 w-64 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
-          >
-            <option value="">Toutes les sections</option>
-            {sections.map((section) => (
-              <option key={section.id} value={section.id}>{section.name}</option>
-            ))}
-          </select>
-        )}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-700 dark:text-gray-300">Début</label>
+            <input
+              type="date"
+              value={dateDebut}
+              onChange={(e) => setDateDebut(e.target.value)}
+              className="flex h-11 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-700 dark:text-gray-300">Fin</label>
+            <input
+              type="date"
+              value={dateFin}
+              onChange={(e) => setDateFin(e.target.value)}
+              className="flex h-11 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+            />
+          </div>
+          {user?.role !== 'SECTION_USER' && (
+            <select
+              value={selectedSection}
+              onChange={(e) => setSelectedSection(e.target.value)}
+              className="flex h-11 w-64 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+            >
+              <option value="">Toutes les sections</option>
+              {sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </motion.div>
 
       {stats ? (

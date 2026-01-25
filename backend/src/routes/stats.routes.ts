@@ -4,6 +4,23 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
+const getDateRangeFilter = (req: AuthRequest) => {
+  const dateDebutRaw = req.query.dateDebut as string | undefined;
+  const dateFinRaw = req.query.dateFin as string | undefined;
+
+  const dateFilter: any = {};
+  if (dateDebutRaw) {
+    const d = new Date(dateDebutRaw);
+    if (!Number.isNaN(d.getTime())) dateFilter.gte = d;
+  }
+  if (dateFinRaw) {
+    const d = new Date(dateFinRaw);
+    if (!Number.isNaN(d.getTime())) dateFilter.lte = d;
+  }
+
+  return Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {};
+};
+
 type TrancheStatsItem = {
   tranche: string;
   nombreRencontres: number;
@@ -89,6 +106,8 @@ router.get(
       const { id } = req.params;
       const { userId, role } = req.user!;
 
+      const dateWhere = getDateRangeFilter(req);
+
       // Vérifier les permissions
       if (role === 'SECTION_USER') {
         const user = await prisma.user.findUnique({
@@ -119,11 +138,11 @@ router.get(
 
       // Récupérer les statistiques
       const totalRencontres = await prisma.rencontre.count({
-        where: { sectionId: id },
+        where: { sectionId: id, ...dateWhere },
       });
 
       const rencontres = await prisma.rencontre.findMany({
-        where: { sectionId: id },
+        where: { sectionId: id, ...dateWhere },
         select: {
           presenceHomme: true,
           presenceFemme: true,
@@ -143,7 +162,7 @@ router.get(
       // Statistiques par type
       const rencontresParType = await prisma.rencontre.groupBy({
         by: ['typeId'],
-        where: { sectionId: id },
+        where: { sectionId: id, ...dateWhere },
         _count: { id: true },
         _sum: {
           presenceHomme: true,
@@ -187,7 +206,7 @@ router.get(
 
       // Rencontres récentes
       const rencontresRecentes = await prisma.rencontre.findMany({
-        where: { sectionId: id },
+        where: { sectionId: id, ...dateWhere },
         include: {
           type: true,
         },
@@ -239,6 +258,8 @@ router.get(
       const { id } = req.params;
       const { userId, role } = req.user!;
 
+      const dateWhere = getDateRangeFilter(req);
+
       // Vérifier les permissions
       if (role !== 'LOCALITE') {
         const user = await prisma.user.findUnique({
@@ -262,11 +283,11 @@ router.get(
 
       // Statistiques globales
       const totalRencontres = await prisma.rencontre.count({
-        where: { sectionId: { in: sectionIds } },
+        where: { sectionId: { in: sectionIds }, ...dateWhere },
       });
 
       const rencontres = await prisma.rencontre.findMany({
-        where: { sectionId: { in: sectionIds } },
+        where: { sectionId: { in: sectionIds }, ...dateWhere },
         select: {
           presenceHomme: true,
           presenceFemme: true,
@@ -288,7 +309,7 @@ router.get(
       const statsParSection = await Promise.all(
         sections.map(async (section: any) => {
           const sectionRencontres = await prisma.rencontre.count({
-            where: { sectionId: section.id },
+            where: { sectionId: section.id, ...dateWhere },
           });
 
           const sectionData = await prisma.section.findUnique({
@@ -311,7 +332,7 @@ router.get(
       // Statistiques par type
       const rencontresParType = await prisma.rencontre.groupBy({
         by: ['typeId'],
-        where: { sectionId: { in: sectionIds } },
+        where: { sectionId: { in: sectionIds }, ...dateWhere },
         _count: { id: true },
         _sum: {
           presenceHomme: true,
@@ -399,6 +420,8 @@ router.get(
     try {
       const { role } = req.user!;
 
+      const dateWhere = getDateRangeFilter(req);
+
       if (role !== 'LOCALITE') {
         res.status(403).json({ error: 'Accès réservé à LOCALITÉ' });
         return;
@@ -407,10 +430,11 @@ router.get(
       // Statistiques globales
       const totalSousLocalites = await prisma.sousLocalite.count();
       const totalSections = await prisma.section.count();
-      const totalRencontres = await prisma.rencontre.count();
+      const totalRencontres = await prisma.rencontre.count({ where: { ...dateWhere } });
       const totalUtilisateurs = await prisma.user.count();
 
       const rencontres = await prisma.rencontre.findMany({
+        where: { ...dateWhere },
         select: {
           presenceHomme: true,
           presenceFemme: true,
@@ -429,6 +453,7 @@ router.get(
       // Statistiques par type
       const rencontresParType = await prisma.rencontre.groupBy({
         by: ['typeId'],
+        where: { ...dateWhere },
         _count: { id: true },
         _sum: {
           presenceHomme: true,
