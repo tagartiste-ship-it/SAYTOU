@@ -20,6 +20,8 @@ export default function MembresPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(100);
 
+  const [corpsMetiers, setCorpsMetiers] = useState<string[]>([]);
+
   const [q, setQ] = useState('');
   const [genreFilter, setGenreFilter] = useState('');
   const [fonctionFilter, setFonctionFilter] = useState('');
@@ -86,6 +88,19 @@ export default function MembresPage() {
     numeroCarteElecteurFilter,
     statutElecteurFilter,
   ]);
+
+  useEffect(() => {
+    const fetchCorpsMetiers = async () => {
+      try {
+        const response = await api.get<{ corpsMetiers: string[] }>('/membres/corps-metiers');
+        setCorpsMetiers(Array.isArray(response.data?.corpsMetiers) ? response.data.corpsMetiers : []);
+      } catch {
+        setCorpsMetiers([]);
+      }
+    };
+
+    fetchCorpsMetiers();
+  }, []);
 
   const clearDraft = () => {
     try {
@@ -424,7 +439,18 @@ export default function MembresPage() {
 
             <div>
               <label className="label text-gray-700 dark:text-gray-300">Corps de métier</label>
-              <Input value={corpsMetierFilter} onChange={(e) => setCorpsMetierFilter(e.target.value)} placeholder="Ex: Enseignant" />
+              <select
+                value={corpsMetierFilter}
+                onChange={(e) => setCorpsMetierFilter(e.target.value)}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="">Tous</option>
+                {corpsMetiers.map((cm) => (
+                  <option key={cm} value={cm}>
+                    {cm}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>

@@ -29,6 +29,55 @@ const computeAgeTranche = (age: number | null): AgeTranche => {
   if (age < 18) return 'S2';
   return 'S3';
 };
+router.get('/corps-metiers', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: 'Non authentifié' });
+      return;
+    }
+
+    let sectionId = '';
+    if (user.role === 'SECTION_USER') {
+      if (!user.sectionId) {
+        res.status(403).json({ error: 'Section non définie pour cet utilisateur' });
+        return;
+      }
+      sectionId = user.sectionId;
+    } else {
+      sectionId = String(req.query.sectionId ?? '').trim();
+      if (!sectionId) {
+        res.status(400).json({ error: 'sectionId requis' });
+        return;
+      }
+    }
+
+    const rows = await prisma.membre.findMany({
+      where: {
+        sectionId,
+        corpsMetier: {
+          not: null,
+        },
+      },
+      distinct: ['corpsMetier'],
+      select: {
+        corpsMetier: true,
+      },
+      orderBy: {
+        corpsMetier: 'asc',
+      },
+    });
+
+    const corpsMetiers = (rows as any[])
+      .map((r) => String(r.corpsMetier ?? '').trim())
+      .filter((v) => v);
+
+    res.json({ corpsMetiers });
+  } catch (error: any) {
+    console.error('Erreur récupération corps de métier:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 router.get('/participations', authenticate, async (req: AuthRequest, res: Response) => {
   try {
