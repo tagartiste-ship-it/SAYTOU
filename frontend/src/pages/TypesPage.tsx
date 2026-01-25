@@ -36,8 +36,10 @@ export default function TypesPage() {
     try {
       const response = await api.get<{ tranchesAge: TrancheAge[] }>('/tranches-age');
       setTranchesAge(response.data.tranchesAge || []);
-    } catch {
+    } catch (error: any) {
       setTranchesAge([]);
+      const errorMsg = error?.response?.data?.error || error?.message || "Erreur lors du chargement des tranches d'âge";
+      toast.error(errorMsg);
     }
   };
 
@@ -147,8 +149,9 @@ export default function TypesPage() {
       await api.delete(`/types/${id}`);
       toast.success('Type supprimé');
       fetchTypes();
-    } catch (error) {
-      toast.error('Erreur lors de la suppression');
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.error || error?.message || 'Erreur lors de la suppression';
+      toast.error(errorMsg);
     }
   };
 
