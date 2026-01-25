@@ -76,20 +76,7 @@ export default function RencontresPage() {
 
   const handleDownloadPDF = async (rencontreId: string) => {
     try {
-      const response = await api.get(`/rencontres/${rencontreId}/pdf`, {
-        responseType: 'blob',
-      });
-
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `rencontre_${rencontreId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      window.open(`/rencontres/${rencontreId}/print`, '_blank', 'noopener,noreferrer');
     } catch (error: any) {
       console.error('Erreur téléchargement PDF:', error);
       toast.error(error.response?.data?.error || 'Erreur lors du téléchargement du PDF');

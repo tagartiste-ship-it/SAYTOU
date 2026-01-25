@@ -28,7 +28,6 @@
     "install": "^0.13.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "puppeteer": "^21.6.1",
     "saytou-backend": "file:",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.0",

@@ -123,7 +123,7 @@ model Membre {
 
 model RencontreType {
   id           String     @id @default(uuid())
-  name         String     @unique
+  name         String
   isReunion    Boolean    @default(false) @map("is_reunion")
   createdById  String?    @map("created_by")
   scopeType    ScopeType? @map("scope_type")

@@ -19,6 +19,7 @@ import StatsPage from './pages/StatsPage';
 import UsersPage from './pages/UsersPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import BinomesPage from './pages/BinomesPage';
+import PrintRencontrePage from './pages/PrintRencontrePage';
 
 // Layout
 import Layout from './components/Layout';
@@ -43,6 +44,15 @@ function App() {
     <>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+
+        <Route
+          path="/rencontres/:id/print"
+          element={
+            <ProtectedRoute>
+              <PrintRencontrePage />
+            </ProtectedRoute>
+          }
+        />
         
         <Route
           path="/"

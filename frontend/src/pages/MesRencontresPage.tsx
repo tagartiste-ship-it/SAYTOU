@@ -78,19 +78,8 @@ export default function MesRencontresPage() {
 
   const handleExportPDF = async (id: string) => {
     try {
-      const response = await api.get(`/pdf/rencontre/${id}`, {
-        responseType: 'blob',
-      });
-      
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `rencontre-${id}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      
-      toast.success('PDF téléchargé avec succès');
+      window.open(`/rencontres/${id}/print`, '_blank', 'noopener,noreferrer');
+      toast.success('Impression prête : choisissez "Enregistrer en PDF"');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Erreur lors de l\'export PDF');
     }

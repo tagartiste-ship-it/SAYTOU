@@ -66,11 +66,20 @@ async function main() {
 
   console.log('📋 Création des types de rencontre...');
   for (const type of types) {
-    await prisma.rencontreType.upsert({
-      where: { name: type.name },
-      update: {},
-      create: type,
+    const existingType = await prisma.rencontreType.findFirst({
+      where: {
+        name: type.name,
+        scopeType: null,
+        scopeId: null,
+      },
+      select: { id: true },
     });
+
+    if (!existingType) {
+      await prisma.rencontreType.create({
+        data: type,
+      });
+    }
   }
   console.log(`✅ ${types.length} types de rencontre créés`);
 

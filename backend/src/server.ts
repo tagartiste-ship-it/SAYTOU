@@ -13,7 +13,6 @@ import sousLocalitesRoutes from './routes/sous-localites.routes.js';
 import sectionsRoutes from './routes/sections.routes.js';
 import typesRoutes from './routes/types.routes.js';
 import rencontresRoutes from './routes/rencontres.routes.js';
-import pdfRoutes from './routes/pdf.routes.js';
 import statsRoutes from './routes/stats.routes.js';
 import membresRoutes from './routes/membres.routes.js';
 import tranchesAgeRoutes from './routes/tranches-age.routes.js';
@@ -53,7 +52,6 @@ app.use('/api/membres', membresRoutes);
 app.use('/api/tranches-age', tranchesAgeRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/binomes', binomesRoutes);
-app.use('/api', pdfRoutes);
 app.use('/api/stats', statsRoutes);
 
 // Route de santé

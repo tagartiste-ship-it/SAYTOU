@@ -95,16 +95,6 @@ router.post(
         return;
       }
 
-      // Vérifier si le type existe déjà
-      const existingType = await prisma.rencontreType.findUnique({
-        where: { name: name.trim() },
-      });
-
-      if (existingType) {
-        res.status(400).json({ error: 'Ce type de rencontre existe déjà' });
-        return;
-      }
-
       // Déterminer le scope selon le rôle
       let scopeType: 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION' | null = null;
       let scopeId: string | null = null;
