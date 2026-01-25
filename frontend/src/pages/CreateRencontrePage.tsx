@@ -1025,11 +1025,11 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
                   </div>
                 );
               })()}
-              {membresPresents.length > 0 && (
+              {membresAbsents.length > 0 && (
                 <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-                  Présents :{' '}
+                  Absents :{' '}
                   {membresPresence
-                    .filter((m) => membresPresents.includes(m.id))
+                    .filter((m) => membresAbsents.includes(m.id))
                     .map((m) => `${m.prenom} ${m.nom}`)
                     .join(', ')}
                 </div>
