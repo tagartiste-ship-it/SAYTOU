@@ -1,5 +1,3 @@
-import puppeteer from 'puppeteer';
-
 interface RencontreData {
   id: string;
   date: Date;
