@@ -32,6 +32,9 @@ export default function MembresPage() {
   const [numeroCarteElecteurFilter, setNumeroCarteElecteurFilter] = useState('');
   const [statutElecteurFilter, setStatutElecteurFilter] = useState('');
 
+  const [dateAdhesionDebutFilter, setDateAdhesionDebutFilter] = useState('');
+  const [dateAdhesionFinFilter, setDateAdhesionFinFilter] = useState('');
+
   const [qDebounced, setQDebounced] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const firstLoadDoneRef = useRef(false);
@@ -50,6 +53,7 @@ export default function MembresPage() {
     numeroCNI: '',
     adresse: '',
     ageTranche: '',
+    dateAdhesion: '',
     numeroCarteElecteur: '',
     lieuVote: ''
   });
@@ -71,6 +75,8 @@ export default function MembresPage() {
     numeroCNIFilter,
     numeroCarteElecteurFilter,
     statutElecteurFilter,
+    dateAdhesionDebutFilter,
+    dateAdhesionFinFilter,
   ]);
 
   useEffect(() => {
@@ -87,6 +93,8 @@ export default function MembresPage() {
     numeroCNIFilter,
     numeroCarteElecteurFilter,
     statutElecteurFilter,
+    dateAdhesionDebutFilter,
+    dateAdhesionFinFilter,
   ]);
 
   useEffect(() => {
@@ -177,6 +185,8 @@ export default function MembresPage() {
       if (numeroCNIFilter) params.numeroCNI = numeroCNIFilter;
       if (numeroCarteElecteurFilter) params.numeroCarteElecteur = numeroCarteElecteurFilter;
       if (statutElecteurFilter) params.statutElecteur = statutElecteurFilter;
+      if (dateAdhesionDebutFilter) params.dateAdhesionDebut = dateAdhesionDebutFilter;
+      if (dateAdhesionFinFilter) params.dateAdhesionFin = dateAdhesionFinFilter;
 
       const response = await api.get<{ membres: Membre[]; pagination?: Pagination }>('/membres', { params, signal: controller.signal });
       setMembres(response.data.membres || []);
@@ -215,6 +225,7 @@ export default function MembresPage() {
       numeroCNI: '',
       adresse: '',
       ageTranche: '',
+      dateAdhesion: new Date().toISOString().slice(0, 10),
       numeroCarteElecteur: '',
       lieuVote: ''
     });
@@ -234,6 +245,7 @@ export default function MembresPage() {
       numeroCNI: membre.numeroCNI || '',
       adresse: membre.adresse || '',
       ageTranche: membre.ageTranche || '',
+      dateAdhesion: membre.dateAdhesion ? new Date(membre.dateAdhesion).toISOString().slice(0, 10) : '',
       numeroCarteElecteur: membre.numeroCarteElecteur || '',
       lieuVote: membre.lieuVote || ''
     });
@@ -255,6 +267,7 @@ export default function MembresPage() {
       numeroCNI: '',
       adresse: '',
       ageTranche: '',
+      dateAdhesion: '',
       numeroCarteElecteur: '',
       lieuVote: ''
     });
@@ -317,6 +330,8 @@ export default function MembresPage() {
     setNumeroCNIFilter('');
     setNumeroCarteElecteurFilter('');
     setStatutElecteurFilter('');
+    setDateAdhesionDebutFilter('');
+    setDateAdhesionFinFilter('');
   };
 
   const containerVariants = {
@@ -478,6 +493,23 @@ export default function MembresPage() {
                 <option value="VOTANT">Votants (18+ avec n° électeur)</option>
                 <option value="NON_VOTANT">Non votants (18+ sans n° électeur)</option>
               </select>
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">Adhésion début</label>
+              <Input
+                type="date"
+                value={dateAdhesionDebutFilter}
+                onChange={(e) => setDateAdhesionDebutFilter(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">Adhésion fin</label>
+              <Input
+                type="date"
+                value={dateAdhesionFinFilter}
+                onChange={(e) => setDateAdhesionFinFilter(e.target.value)}
+              />
             </div>
           </div>
 
@@ -660,6 +692,15 @@ export default function MembresPage() {
                         <option value="S2">S2</option>
                         <option value="S3">S3</option>
                       </select>
+                    </div>
+
+                    <div>
+                      <label className="label text-gray-700 dark:text-gray-300">Date d'adhésion</label>
+                      <Input
+                        type="date"
+                        value={formData.dateAdhesion}
+                        onChange={(e) => setFormData({ ...formData, dateAdhesion: e.target.value })}
+                      />
                     </div>
                     <div>
                       <label className="label text-gray-700 dark:text-gray-300">N° carte électeur</label>

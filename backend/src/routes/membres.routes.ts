@@ -35,6 +35,13 @@ const computeAgeTranche = (age: number | null): AgeTranche => {
   if (age < 18) return 'S2';
   return 'S3';
 };
+
+const parseOptionalDate = (value: unknown) => {
+  if (value == null || String(value).trim() === '') return null;
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return undefined;
+  return d;
+};
 router.get('/corps-metiers', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user;
@@ -211,6 +218,9 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const numeroCarteElecteur = String(req.query.numeroCarteElecteur ?? '').trim();
     const statutElecteur = String(req.query.statutElecteur ?? '').trim().toUpperCase();
 
+    const dateAdhesionDebutRaw = String(req.query.dateAdhesionDebut ?? '').trim();
+    const dateAdhesionFinRaw = String(req.query.dateAdhesionFin ?? '').trim();
+
     const page = Math.max(1, Number(String(req.query.page ?? '1')) || 1);
     const limit = Math.min(200, Math.max(1, Number(String(req.query.limit ?? '100')) || 100));
     const skip = (page - 1) * limit;
@@ -265,6 +275,19 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         whereAnd.push({ dateNaissance: { lte: date18 } });
         whereAnd.push({ OR: [{ numeroCarteElecteur: null }, { numeroCarteElecteur: '' }] });
       }
+    }
+
+    if (dateAdhesionDebutRaw || dateAdhesionFinRaw) {
+      const dateFilter: any = {};
+      if (dateAdhesionDebutRaw) {
+        const d = new Date(dateAdhesionDebutRaw);
+        if (!Number.isNaN(d.getTime())) dateFilter.gte = d;
+      }
+      if (dateAdhesionFinRaw) {
+        const d = new Date(dateAdhesionFinRaw);
+        if (!Number.isNaN(d.getTime())) dateFilter.lte = d;
+      }
+      if (Object.keys(dateFilter).length > 0) whereAnd.push({ dateAdhesion: dateFilter });
     }
 
     const where = whereAnd.length > 0 ? { AND: whereAnd } : {};
@@ -336,6 +359,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       adresse,
       dateNaissance,
       ageTranche,
+      dateAdhesion,
       numeroCarteElecteur,
       lieuVote,
     } = req.body;
@@ -362,10 +386,11 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     const normalizedAgeTranche = normalizeAgeTranche(ageTranche);
 
-    const dateNaissanceValue = dateNaissance ? new Date(String(dateNaissance)) : null;
-    if (dateNaissance && Number.isNaN(dateNaissanceValue?.getTime())) {
-      return res.status(400).json({ error: 'dateNaissance invalide' });
-    }
+    const dateNaissanceValue = parseOptionalDate(dateNaissance);
+    if (dateNaissanceValue === undefined) return res.status(400).json({ error: 'dateNaissance invalide' });
+
+    const dateAdhesionValue = parseOptionalDate(dateAdhesion);
+    if (dateAdhesionValue === undefined) return res.status(400).json({ error: "dateAdhesion invalide" });
 
     if (!dateNaissanceValue && !normalizedAgeTranche) {
       return res.status(400).json({ error: "ageTranche requise (S1, S2 ou S3)" });
@@ -386,6 +411,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         adresse,
         dateNaissance: dateNaissanceValue,
         ageTranche: normalizedAgeTranche,
+        dateAdhesion: dateAdhesionValue ?? new Date(),
         numeroCarteElecteur,
         lieuVote,
       },
@@ -433,6 +459,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       adresse,
       dateNaissance,
       ageTranche,
+      dateAdhesion,
       numeroCarteElecteur,
       lieuVote,
     } = req.body;
@@ -444,10 +471,11 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
     const normalizedAgeTranche = normalizeAgeTranche(ageTranche);
 
-    const dateNaissanceValue = dateNaissance ? new Date(String(dateNaissance)) : null;
-    if (dateNaissance && Number.isNaN(dateNaissanceValue?.getTime())) {
-      return res.status(400).json({ error: 'dateNaissance invalide' });
-    }
+    const dateNaissanceValue = parseOptionalDate(dateNaissance);
+    if (dateNaissanceValue === undefined) return res.status(400).json({ error: 'dateNaissance invalide' });
+
+    const dateAdhesionValue = parseOptionalDate(dateAdhesion);
+    if (dateAdhesionValue === undefined) return res.status(400).json({ error: 'dateAdhesion invalide' });
 
     if (!dateNaissanceValue && !normalizedAgeTranche) {
       return res.status(400).json({ error: "ageTranche requise (S1, S2 ou S3)" });
@@ -468,6 +496,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         adresse,
         dateNaissance: dateNaissanceValue,
         ageTranche: normalizedAgeTranche,
+        dateAdhesion: dateAdhesionValue === null ? undefined : dateAdhesionValue,
         numeroCarteElecteur: numeroCarteElecteur === undefined ? undefined : numeroCarteElecteur,
         lieuVote: lieuVote === undefined ? undefined : lieuVote,
       },
@@ -475,10 +504,10 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         section: {
           select: {
             id: true,
-            name: true
-          }
-        }
-      }
+            name: true,
+          },
+        },
+      },
     });
     
     const age = computeAge(membre.dateNaissance);

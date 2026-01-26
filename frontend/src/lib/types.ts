@@ -127,6 +127,7 @@ export interface Membre {
   numeroCNI?: string;
   adresse?: string | null;
   dateNaissance?: string | null;
+  dateAdhesion?: string | null;
   numeroCarteElecteur?: string | null;
   lieuVote?: string | null;
   age?: number | null;
