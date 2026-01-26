@@ -20,6 +20,7 @@ import UsersPage from './pages/UsersPage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import BinomesPage from './pages/BinomesPage';
 import PrintRencontrePage from './pages/PrintRencontrePage';
+import BureauPage from './pages/BureauPage';
 
 // Layout
 import Layout from './components/Layout';
@@ -151,6 +152,7 @@ function App() {
           <Route path="types" element={<TypesPage />} />
           <Route path="stats" element={<StatsPage />} />
           <Route path="binomes" element={<BinomesPage />} />
+          <Route path="bureau" element={<BureauPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -19,6 +19,7 @@ import tranchesAgeRoutes from './routes/tranches-age.routes.js';
 import usersRoutes from './routes/users.routes.js';
 import binomesRoutes from './routes/binomes.routes.js';
 import { startBinomesAutoRotationJob } from './routes/binomes.routes.js';
+import bureauRoutes from './routes/bureau.routes.js';
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use('/api/tranches-age', tranchesAgeRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/binomes', binomesRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/bureau', bureauRoutes);
 
 // Route de santé
 app.get('/health', (req: Request, res: Response) => {

@@ -22,6 +22,27 @@ enum ScopeType {
   SECTION
 }
 
+enum BureauScopeType {
+  LOCALITE
+  SOUS_LOCALITE
+  SECTION
+}
+
+enum BureauGroupe {
+  S1S2
+  S3
+}
+
+enum BureauAffectationKind {
+  TITULAIRE
+  ADJOINT
+}
+
+enum BureauSlotType {
+  PRIMARY
+  EXTRA
+}
+
 model User {
   id                  String    @id @default(uuid())
   email               String    @unique
@@ -120,7 +141,44 @@ model Membre {
   binomePairsA   BinomePair[] @relation("BinomePairMembreA")
   binomePairsB   BinomePair[] @relation("BinomePairMembreB")
 
+  bureauAffectations BureauAffectation[]
+
   @@map("membres")
+}
+
+model BureauPoste {
+  id        String         @id @default(uuid())
+  name      String
+  scopeType BureauScopeType @map("scope_type")
+  scopeId   String          @map("scope_id")
+  groupe    BureauGroupe
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  affectations BureauAffectation[]
+
+  @@index([scopeType, scopeId])
+  @@index([groupe])
+  @@unique([scopeType, scopeId, groupe, name])
+  @@map("bureau_postes")
+}
+
+model BureauAffectation {
+  id        String              @id @default(uuid())
+  posteId   String              @map("poste_id")
+  membreId  String              @map("membre_id")
+  kind      BureauAffectationKind
+  slotType  BureauSlotType      @default(EXTRA) @map("slot_type")
+  slotIndex Int                 @default(0) @map("slot_index")
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  poste  BureauPoste @relation(fields: [posteId], references: [id], onDelete: Cascade)
+  membre Membre      @relation(fields: [membreId], references: [id], onDelete: Cascade)
+
+  @@index([posteId])
+  @@index([membreId])
+  @@unique([posteId, kind, slotType, slotIndex])
+  @@map("bureau_affectations")
 }
 
 model RencontreType {

@@ -2,6 +2,11 @@ export type UserRole = 'LOCALITE' | 'SOUS_LOCALITE_ADMIN' | 'SECTION_USER';
 
 export type ScopeType = 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION';
 
+export type BureauScopeType = 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION';
+export type BureauGroupe = 'S1S2' | 'S3';
+export type BureauAffectationKind = 'TITULAIRE' | 'ADJOINT';
+export type BureauSlotType = 'PRIMARY' | 'EXTRA';
+
 export interface User {
   id: string;
   email: string;
@@ -62,6 +67,28 @@ export interface TrancheAge {
   order: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface BureauAffectation {
+  id: string;
+  posteId: string;
+  membreId: string;
+  kind: BureauAffectationKind;
+  slotType: BureauSlotType;
+  slotIndex: number;
+  createdAt: string;
+  membre?: Membre;
+}
+
+export interface BureauPoste {
+  id: string;
+  name: string;
+  scopeType: BureauScopeType;
+  scopeId: string;
+  groupe: BureauGroupe;
+  createdAt: string;
+  updatedAt: string;
+  affectations?: BureauAffectation[];
 }
 
 export interface MembreParticipationRencontre {

@@ -10,6 +10,7 @@ import {
   Tags, 
   BarChart3, 
   UsersRound,
+  Briefcase,
   LogOut,
   Menu,
   X
@@ -166,6 +167,7 @@ export default function Layout() {
     { name: 'Mes Rencontres', href: '/mes-rencontres', icon: CalendarCheck },
     { name: 'Historique', href: '/rencontres', icon: Calendar },
     { name: 'Membres', href: '/membres', icon: Users },
+    { name: 'Bureau', href: '/bureau', icon: Briefcase },
     { name: 'Binômes', href: '/binomes', icon: UsersRound },
     { name: 'Utilisateurs', href: '/users', icon: UserCog, roles: ['LOCALITE', 'SOUS_LOCALITE_ADMIN'] },
     { name: 'Sous-Localités', href: '/sous-localites', icon: Building2, roles: ['LOCALITE'] },
