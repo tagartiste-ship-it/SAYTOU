@@ -225,7 +225,7 @@ export default function MembresPage() {
       numeroCNI: '',
       adresse: '',
       ageTranche: '',
-      dateAdhesion: new Date().toISOString().slice(0, 10),
+      dateAdhesion: '',
       numeroCarteElecteur: '',
       lieuVote: ''
     });
