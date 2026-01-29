@@ -222,7 +222,9 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const dateAdhesionFinRaw = String(req.query.dateAdhesionFin ?? '').trim();
 
     const page = Math.max(1, Number(String(req.query.page ?? '1')) || 1);
-    const limit = Math.min(1000, Math.max(1, Number(String(req.query.limit ?? '1000')) || 1000));
+    const maxLimit = user.role === 'LOCALITE' ? 100000 : 1000;
+    const defaultLimit = user.role === 'LOCALITE' ? 100000 : 1000;
+    const limit = Math.min(maxLimit, Math.max(1, Number(String(req.query.limit ?? String(defaultLimit))) || defaultLimit));
     const skip = (page - 1) * limit;
 
     // Déterminer la section à filtrer selon le rôle
