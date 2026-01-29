@@ -9,10 +9,51 @@ type BureauGroupe = 'S1S2' | 'S3';
 type BureauAffectationKind = 'TITULAIRE' | 'ADJOINT';
 type BureauSlotType = 'PRIMARY' | 'EXTRA';
 
+type AgeTranche = 'S1' | 'S2' | 'S3' | null;
+
+const normalizeAgeTranche = (value: unknown): AgeTranche => {
+  const v = String(value ?? '').trim().toUpperCase();
+  if (v === 'S1' || v === 'S2' || v === 'S3') return v as AgeTranche;
+  return null;
+};
+
+const computeAge = (dateNaissance?: Date | null): number | null => {
+  if (!dateNaissance) return null;
+  const d = new Date(dateNaissance);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  const m = now.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < d.getDate())) {
+    age -= 1;
+  }
+  if (age < 0) return null;
+  return age;
+};
+
+const computeAgeTranche = (age: number | null): AgeTranche => {
+  if (age === null) return null;
+  if (age < 12) return 'S1';
+  if (age < 18) return 'S2';
+  return 'S3';
+};
+
+const resolveMembreTranche = (m: { ageTranche?: unknown; dateNaissance?: Date | null }): AgeTranche => {
+  return normalizeAgeTranche(m.ageTranche) ?? computeAgeTranche(computeAge(m.dateNaissance ?? null));
+};
+
 const parseScopeType = (value: unknown): BureauScopeType | null => {
   const v = String(value ?? '').trim().toUpperCase();
   if (v === 'LOCALITE' || v === 'SOUS_LOCALITE' || v === 'SECTION') return v as BureauScopeType;
   return null;
+};
+
+const buildScopeWhere = (scopeType: BureauScopeType, scopeId: string) => {
+  if (scopeType === 'SECTION') return { sectionId: scopeId };
+  if (scopeType === 'SOUS_LOCALITE') {
+    return { section: { sousLocaliteId: scopeId } };
+  }
+  return { section: { sousLocalite: { localiteId: scopeId } } };
 };
 
 const parseGroupe = (value: unknown): BureauGroupe | null => {
@@ -214,14 +255,15 @@ router.get('/eligible-membres', authenticate, async (req: AuthRequest, res: Resp
     const resolved = await resolveScope(req, scopeTypeReq, req.query.scopeId);
     if (!resolved) return res.status(400).json({ error: 'Scope invalide' });
 
-    const membres = await prisma.membre.findMany({
-      where: buildMembreWhereForScope(resolved.scopeType, resolved.scopeId, groupe),
+    const membresRaw: any[] = await prisma.membre.findMany({
+      where: buildScopeWhere(resolved.scopeType, resolved.scopeId),
       select: {
         id: true,
         prenom: true,
         nom: true,
         genre: true,
         ageTranche: true,
+        dateNaissance: true,
         section: {
           select: { id: true, name: true },
         },
@@ -229,6 +271,16 @@ router.get('/eligible-membres', authenticate, async (req: AuthRequest, res: Resp
       orderBy: [{ nom: 'asc' }, { prenom: 'asc' }],
       take: 5000,
     });
+
+    const membres = membresRaw
+      .map((m) => {
+        const finalTranche = resolveMembreTranche(m);
+        return { ...m, ageTranche: finalTranche };
+      })
+      .filter((m) => {
+        if (groupe === 'S3') return m.ageTranche === 'S3';
+        return m.ageTranche === 'S1' || m.ageTranche === 'S2';
+      });
 
     res.json({ scope: resolved, groupe, membres });
   } catch (error: any) {
@@ -323,14 +375,16 @@ router.post('/affectations', authenticate, async (req: AuthRequest, res: Respons
     // Validate membre is eligible for this poste scope + groupe
     const membre: any = await prisma.membre.findUnique({
       where: { id: cleanMembreId },
-      select: { id: true, sectionId: true, ageTranche: true, section: { select: { sousLocaliteId: true, sousLocalite: { select: { localiteId: true } } } } },
+      select: { id: true, sectionId: true, ageTranche: true, dateNaissance: true, section: { select: { sousLocaliteId: true, sousLocalite: { select: { localiteId: true } } } } },
     });
     if (!membre) return res.status(404).json({ error: 'Membre non trouvé' });
 
-    if (poste.groupe === 'S3' && membre.ageTranche !== 'S3') {
+    const finalTranche = resolveMembreTranche(membre);
+
+    if (poste.groupe === 'S3' && finalTranche !== 'S3') {
       return res.status(400).json({ error: 'Membre non éligible (groupe S3)' });
     }
-    if (poste.groupe === 'S1S2' && membre.ageTranche !== 'S1' && membre.ageTranche !== 'S2') {
+    if (poste.groupe === 'S1S2' && finalTranche !== 'S1' && finalTranche !== 'S2') {
       return res.status(400).json({ error: 'Membre non éligible (groupe S1S2)' });
     }
 
