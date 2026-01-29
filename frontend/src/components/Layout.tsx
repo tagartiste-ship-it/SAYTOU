@@ -341,7 +341,17 @@ export default function Layout() {
               <Menu className="h-6 w-6 text-gray-700 dark:text-gray-300" />
             </button>
             <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">SAYTOU</h1>
-            <ThemeToggle />
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <button
+                onClick={() => void handleLogout()}
+                className="rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                aria-label="Déconnexion"
+                title="Déconnexion"
+              >
+                <LogOut className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </button>
+            </div>
           </div>
         </header>
 
