@@ -240,12 +240,28 @@ export default function CreateRencontrePage() {
 
       // Charger les membres (section user: sa section; admin: section sélectionnée)
       const membresRes = await api.get<{ membres: Membre[] }>('/membres', {
-        params: user?.role === 'SECTION_USER' ? undefined : { sectionId: formData.sectionId || undefined },
+        params:
+          user?.role === 'SECTION_USER'
+            ? { limit: 1000 }
+            : { sectionId: formData.sectionId || undefined, limit: 1000 },
       });
       setMembres(membresRes.data.membres || []);
 
-      const membresPresenceRes = await api.get<{ membres: Membre[] }>('/membres');
-      setMembresPresence(membresPresenceRes.data.membres || []);
+      const presenceParams =
+        user?.role === 'SECTION_USER'
+          ? { limit: 1000 }
+          : formData.sectionId
+            ? { sectionId: formData.sectionId, limit: 1000 }
+            : null;
+
+      if (presenceParams) {
+        const membresPresenceRes = await api.get<{ membres: Membre[] }>('/membres', {
+          params: presenceParams,
+        });
+        setMembresPresence(membresPresenceRes.data.membres || []);
+      } else {
+        setMembresPresence([]);
+      }
     } catch (error: any) {
       console.error('Erreur détaillée:', error);
       toast.error(error.response?.data?.error || 'Erreur lors du chargement des données');
@@ -266,7 +282,7 @@ export default function CreateRencontrePage() {
     const fetchMembresForSection = async () => {
       try {
         const membresRes = await api.get<{ membres: Membre[] }>('/membres', {
-          params: { sectionId: formData.sectionId },
+          params: { sectionId: formData.sectionId, limit: 1000 },
         });
         setMembres(membresRes.data.membres || []);
 

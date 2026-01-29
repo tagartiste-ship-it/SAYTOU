@@ -222,7 +222,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const dateAdhesionFinRaw = String(req.query.dateAdhesionFin ?? '').trim();
 
     const page = Math.max(1, Number(String(req.query.page ?? '1')) || 1);
-    const limit = Math.min(200, Math.max(1, Number(String(req.query.limit ?? '100')) || 100));
+    const limit = Math.min(1000, Math.max(1, Number(String(req.query.limit ?? '1000')) || 1000));
     const skip = (page - 1) * limit;
 
     // Déterminer la section à filtrer selon le rôle
@@ -234,9 +234,61 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         return res.status(403).json({ error: 'Section non définie pour cet utilisateur' });
       }
       whereAnd.push({ sectionId: user.sectionId });
-    } else if (req.query.sectionId) {
-      // Pour les autres rôles, filtrer par section si spécifié
-      whereAnd.push({ sectionId: String(req.query.sectionId) });
+    } else {
+      const sectionIdParam = String(req.query.sectionId ?? '').trim();
+
+      if (user.role === 'SOUS_LOCALITE_ADMIN') {
+        const creatorUser = await prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { sousLocaliteId: true },
+        });
+
+        if (!creatorUser?.sousLocaliteId) {
+          return res.status(403).json({ error: 'Sous-localité non définie pour cet utilisateur' });
+        }
+
+        if (sectionIdParam) {
+          const section = await prisma.section.findUnique({
+            where: { id: sectionIdParam },
+            select: { sousLocaliteId: true },
+          });
+
+          if (!section || section.sousLocaliteId !== creatorUser.sousLocaliteId) {
+            return res.status(403).json({ error: 'Accès non autorisé' });
+          }
+
+          whereAnd.push({ sectionId: sectionIdParam });
+        } else {
+          whereAnd.push({ section: { sousLocaliteId: creatorUser.sousLocaliteId } });
+        }
+      } else if (user.role === 'LOCALITE') {
+        const creatorUser = await prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { sousLocalite: { select: { localiteId: true } } },
+        });
+
+        const localiteId = creatorUser?.sousLocalite?.localiteId;
+        if (!localiteId) {
+          return res.status(403).json({ error: 'Localité non définie pour cet utilisateur' });
+        }
+
+        if (sectionIdParam) {
+          const section = await prisma.section.findUnique({
+            where: { id: sectionIdParam },
+            select: { sousLocalite: { select: { localiteId: true } } },
+          });
+
+          if (!section || section.sousLocalite.localiteId !== localiteId) {
+            return res.status(403).json({ error: 'Accès non autorisé' });
+          }
+
+          whereAnd.push({ sectionId: sectionIdParam });
+        } else {
+          whereAnd.push({ section: { sousLocalite: { localiteId } } });
+        }
+      } else if (sectionIdParam) {
+        whereAnd.push({ sectionId: sectionIdParam });
+      }
     }
 
     // Recherche texte (prénom, nom, téléphone, CNI, carte électeur)

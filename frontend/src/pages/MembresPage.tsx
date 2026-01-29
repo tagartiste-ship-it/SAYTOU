@@ -18,7 +18,7 @@ export default function MembresPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(100);
+  const [limit, setLimit] = useState(1000);
 
   const [corpsMetiers, setCorpsMetiers] = useState<string[]>([]);
 
@@ -526,13 +526,16 @@ export default function MembresPage() {
             <div className="flex items-center gap-2 justify-end">
               <span className="text-sm text-gray-600 dark:text-gray-400">Par page</span>
               <select
-                value={String(limit)}
-                onChange={(e) => setLimit(Number(e.target.value) || 100)}
+                value={limit}
+                onChange={(e) => setLimit(Number(e.target.value) || 1000)}
                 className="flex h-11 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
               >
                 <option value="25">25</option>
                 <option value="50">50</option>
                 <option value="100">100</option>
+                <option value="250">250</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
               </select>
             </div>
           </div>
