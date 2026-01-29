@@ -82,13 +82,6 @@ export default function MembresPage() {
   ]);
 
   useEffect(() => {
-    if (user?.role !== 'LOCALITE') return;
-    if (limit === 100000) return;
-    setLimit(100000);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.role]);
-
-  useEffect(() => {
     fetchMembres();
   }, [
     page,
@@ -545,7 +538,7 @@ export default function MembresPage() {
                 <option value="250">250</option>
                 <option value="500">500</option>
                 <option value="1000">1000</option>
-                <option value="100000">100000</option>
+                {user?.role === 'LOCALITE' ? <option value="100000">100000</option> : null}
               </select>
             </div>
           </div>
