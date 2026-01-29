@@ -356,8 +356,13 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     const where = whereAnd.length > 0 ? { AND: whereAnd } : {};
 
-    const [total, membres] = await Promise.all([
+    const whereHommes = whereAnd.length > 0 ? { AND: [...whereAnd, { genre: 'HOMME' }] } : { genre: 'HOMME' };
+    const whereFemmes = whereAnd.length > 0 ? { AND: [...whereAnd, { genre: 'FEMME' }] } : { genre: 'FEMME' };
+
+    const [total, totalHommes, totalFemmes, membres] = await Promise.all([
       prisma.membre.count({ where }),
+      prisma.membre.count({ where: whereHommes }),
+      prisma.membre.count({ where: whereFemmes }),
       prisma.membre.findMany({
         where,
         skip,
@@ -389,6 +394,11 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     res.json({
       membres: membresEnrichis,
+      stats: {
+        total,
+        hommes: totalHommes,
+        femmes: totalFemmes,
+      },
       pagination: {
         total,
         page,

@@ -19,6 +19,7 @@ export default function MembresPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [stats, setStats] = useState<{ total: number; hommes: number; femmes: number } | null>(null);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(1000);
 
@@ -190,9 +191,14 @@ export default function MembresPage() {
       if (dateAdhesionDebutFilter) params.dateAdhesionDebut = dateAdhesionDebutFilter;
       if (dateAdhesionFinFilter) params.dateAdhesionFin = dateAdhesionFinFilter;
 
-      const response = await api.get<{ membres: Membre[]; pagination?: Pagination }>('/membres', { params, signal: controller.signal });
+      const response = await api.get<{
+        membres: Membre[];
+        pagination?: Pagination;
+        stats?: { total: number; hommes: number; femmes: number };
+      }>('/membres', { params, signal: controller.signal });
       setMembres(response.data.membres || []);
       setPagination(response.data.pagination ?? null);
+      setStats(response.data.stats ?? null);
     } catch (error: any) {
       if (error?.name === 'CanceledError' || error?.code === 'ERR_CANCELED') {
         return;
@@ -352,7 +358,9 @@ export default function MembresPage() {
   const membresHommes = membres.filter((membre) => membre.genre === 'HOMME');
   const membresFemmes = membres.filter((membre) => membre.genre === 'FEMME');
   const membresSansGenre = membres.filter((membre) => !membre.genre);
-  const totalMembres = membres.length;
+  const totalMembres = stats?.total ?? membres.length;
+  const totalHommes = stats?.hommes ?? membresHommes.length;
+  const totalFemmes = stats?.femmes ?? membresFemmes.length;
 
   const isElecteurMode = Boolean(statutElecteurFilter);
 
@@ -386,10 +394,10 @@ export default function MembresPage() {
             {totalMembres} membres
           </Badge>
           <Badge variant="secondary" className="px-3 py-1 text-sm">
-            👨 {membresHommes.length} Hommes
+            👨 {totalHommes} Hommes
           </Badge>
           <Badge variant="accent" className="px-3 py-1 text-sm">
-            👩 {membresFemmes.length} Femmes
+            👩 {totalFemmes} Femmes
           </Badge>
           <Button
             onClick={handleAdd}
@@ -801,7 +809,7 @@ export default function MembresPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               {/* Colonne Hommes */}
               <div className="space-y-3">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Hommes ({membresHommes.length})</h2>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Hommes ({totalHommes})</h2>
                 {membresHommes.length === 0 && (
                   <Card className="p-6 text-center text-gray-500 dark:text-gray-400">
                     Aucun homme enregistré
@@ -1062,7 +1070,7 @@ export default function MembresPage() {
 
             {/* Colonne Femmes */}
             <div className="space-y-3">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Femmes ({membresFemmes.length})</h2>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Femmes ({totalFemmes})</h2>
               {membresFemmes.length === 0 && (
                 <Card className="p-6 text-center text-gray-500 dark:text-gray-400">
                   Aucune femme enregistrée
