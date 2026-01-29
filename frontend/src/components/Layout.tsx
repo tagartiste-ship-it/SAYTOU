@@ -355,6 +355,15 @@ export default function Layout() {
           </div>
         </header>
 
+        <button
+          onClick={() => void handleLogout()}
+          className="fixed bottom-4 right-4 z-50 rounded-full bg-white dark:bg-gray-900 p-3 shadow-lg border border-gray-200 dark:border-gray-800 lg:hidden"
+          aria-label="Déconnexion"
+          title="Déconnexion"
+        >
+          <LogOut className="h-5 w-5 text-red-600 dark:text-red-400" />
+        </button>
+
         {/* Page content */}
         <main ref={mainRef} id="app-scroll-container" className="flex-1 overflow-y-auto overscroll-none bg-gray-50 dark:bg-gray-950 p-4 pb-24 lg:p-8 lg:pb-8">
           <Outlet />
