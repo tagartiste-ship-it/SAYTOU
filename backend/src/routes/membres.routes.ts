@@ -266,10 +266,20 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       } else if (user.role === 'LOCALITE') {
         const creatorUser = await prisma.user.findUnique({
           where: { id: user.userId },
-          select: { sousLocalite: { select: { localiteId: true } } },
+          select: { sousLocaliteId: true, sousLocalite: { select: { localiteId: true } } },
         });
 
-        const localiteId = creatorUser?.sousLocalite?.localiteId;
+        let localiteId = creatorUser?.sousLocalite?.localiteId ?? null;
+
+        if (!localiteId) {
+          const anySousLocalite = await prisma.sousLocalite.findFirst({
+            where: { createdById: user.userId },
+            select: { localiteId: true },
+            orderBy: { createdAt: 'asc' },
+          });
+          localiteId = anySousLocalite?.localiteId ?? null;
+        }
+
         if (!localiteId) {
           return res.status(403).json({ error: 'Localité non définie pour cet utilisateur' });
         }
