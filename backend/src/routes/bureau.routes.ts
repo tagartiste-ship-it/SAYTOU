@@ -276,10 +276,6 @@ router.get('/eligible-membres', authenticate, async (req: AuthRequest, res: Resp
       .map((m) => {
         const finalTranche = resolveMembreTranche(m);
         return { ...m, ageTranche: finalTranche };
-      })
-      .filter((m) => {
-        if (groupe === 'S3') return m.ageTranche === 'S3';
-        return m.ageTranche === 'S1' || m.ageTranche === 'S2';
       });
 
     res.json({ scope: resolved, groupe, membres });
@@ -378,15 +374,6 @@ router.post('/affectations', authenticate, async (req: AuthRequest, res: Respons
       select: { id: true, sectionId: true, ageTranche: true, dateNaissance: true, section: { select: { sousLocaliteId: true, sousLocalite: { select: { localiteId: true } } } } },
     });
     if (!membre) return res.status(404).json({ error: 'Membre non trouvé' });
-
-    const finalTranche = resolveMembreTranche(membre);
-
-    if (poste.groupe === 'S3' && finalTranche !== 'S3') {
-      return res.status(400).json({ error: 'Membre non éligible (groupe S3)' });
-    }
-    if (poste.groupe === 'S1S2' && finalTranche !== 'S1' && finalTranche !== 'S2') {
-      return res.status(400).json({ error: 'Membre non éligible (groupe S1S2)' });
-    }
 
     if (poste.scopeType === 'SECTION') {
       if (membre.sectionId !== poste.scopeId) return res.status(400).json({ error: 'Membre hors scope (section)' });
