@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Trash2, Save, Users, Calendar, FileText } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,8 +13,16 @@ import { Skeleton } from '../components/ui/Skeleton';
 
 export default function EditRencontrePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuthStore();
+
+  useEffect(() => {
+    const from = new URLSearchParams(location.search).get('from');
+    if (from === 'mes') return;
+    toast.error('Modification autorisée uniquement depuis Mes Rencontres');
+    navigate('/mes-rencontres', { replace: true });
+  }, [location.search, navigate]);
 
   useEffect(() => {
     if (user?.role !== 'SECTION_USER') return;
