@@ -36,6 +36,8 @@ router.post(
         moderateur,
         moniteur,
         theme,
+        developpement,
+        pvReunion,
         ordreDuJour,
         membresPresents,
         presenceHomme,
@@ -163,6 +165,8 @@ router.post(
           moderateur,
           moniteur,
           theme: type.isReunion ? null : theme,
+          developpement: typeof developpement === 'string' && developpement.trim() ? developpement : null,
+          pvReunion: typeof pvReunion === 'string' && pvReunion.trim() ? pvReunion : null,
           ordreDuJour: type.isReunion ? ordreDuJour : null,
           membresPresents: Array.isArray(membresPresents) ? membresPresents : null,
           presenceHomme: presH,
@@ -521,6 +525,8 @@ router.put(
         moderateur,
         moniteur,
         theme,
+        developpement,
+        pvReunion,
         ordreDuJour,
         membresPresents,
         presenceHomme,
@@ -557,6 +563,12 @@ router.put(
           moderateur: moderateur || undefined,
           moniteur: moniteur || undefined,
           theme: existingRencontre.type.isReunion ? null : (theme !== undefined ? theme : undefined),
+          developpement:
+            developpement !== undefined
+              ? (typeof developpement === 'string' && developpement.trim() ? developpement : null)
+              : undefined,
+          pvReunion:
+            pvReunion !== undefined ? (typeof pvReunion === 'string' && pvReunion.trim() ? pvReunion : null) : undefined,
           ordreDuJour: existingRencontre.type.isReunion ? (ordreDuJour !== undefined ? ordreDuJour : undefined) : null,
           membresPresents: membresPresents !== undefined ? (Array.isArray(membresPresents) ? membresPresents : null) : undefined,
           presenceHomme: presH,

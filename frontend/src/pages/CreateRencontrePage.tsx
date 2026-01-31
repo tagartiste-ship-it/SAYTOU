@@ -377,11 +377,6 @@ export default function CreateRencontrePage() {
       return;
     }
 
-    if (!isReunion && formData.theme.trim() && !formData.developpement.trim()) {
-      toast.error('Veuillez renseigner le DÉVELOPPEMENT du thème');
-      return;
-    }
-
     setIsLoading(true);
     try {
       const lieuNom = formData.lieuMembreNomLibre?.trim() || '';
@@ -692,7 +687,7 @@ export default function CreateRencontrePage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Développement du thème <span className="text-red-500">*</span>
+                    Développement du thème
                   </label>
                   <textarea
                     value={formData.developpement}
@@ -700,7 +695,6 @@ export default function CreateRencontrePage() {
                     className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 text-gray-900 dark:text-gray-100"
                     rows={6}
                     placeholder="Décrivez le développement du thème..."
-                    required
                   />
                 </div>
               </Card>
