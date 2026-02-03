@@ -73,7 +73,9 @@ router.post('/bootstrap-owner', async (req: AuthRequest, res: Response): Promise
       return;
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await (prisma.user as any).findFirst({
+      where: { email: { equals: email, mode: 'insensitive' as const } },
+    });
     if (!user) {
       res.status(404).json({ error: 'Utilisateur non trouvé' });
       return;
