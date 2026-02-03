@@ -76,8 +76,23 @@ router.post('/bootstrap-owner', async (req: AuthRequest, res: Response): Promise
     const user = await (prisma.user as any).findFirst({
       where: { email: { equals: email, mode: 'insensitive' as const } },
     });
+
     if (!user) {
-      res.status(404).json({ error: 'Utilisateur non trouvé' });
+      const tempPassword = generateTempPassword();
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
+
+      const created = await prisma.user.create({
+        data: {
+          email,
+          passwordHash,
+          name: 'OWNER',
+          role: 'OWNER' as any,
+          mustChangePassword: true,
+        },
+        select: { id: true, email: true, name: true, role: true, mustChangePassword: true },
+      });
+
+      res.json({ message: 'Utilisateur OWNER créé', user: created, tempPassword });
       return;
     }
 
