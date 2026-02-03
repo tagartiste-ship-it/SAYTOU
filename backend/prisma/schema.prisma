@@ -11,7 +11,11 @@ datasource db {
 }
 
 enum UserRole {
+  OWNER
   LOCALITE
+  COMITE_ADMIN
+  ZONE_ADMIN
+  CONCLAVE_ADMIN
   SOUS_LOCALITE_ADMIN
   SECTION_USER
 }
@@ -49,6 +53,9 @@ model User {
   passwordHash        String    @map("password_hash")
   role                UserRole
   name                String
+  conclaveId           String?   @map("conclave_id")
+  zoneId               String?   @map("zone_id")
+  comiteId             String?   @map("comite_id")
   sousLocaliteId      String?   @map("sous_localite_id")
   sectionId           String?   @map("section_id")
   refreshToken        String?   @map("refresh_token")
@@ -58,6 +65,9 @@ model User {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
+  conclave    Conclave?    @relation(fields: [conclaveId], references: [id], onDelete: SetNull)
+  zone        Zone?        @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  comite      Comite?      @relation(fields: [comiteId], references: [id], onDelete: SetNull)
   sousLocalite SousLocalite? @relation(fields: [sousLocaliteId], references: [id], onDelete: SetNull)
   section      Section?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
@@ -67,17 +77,67 @@ model User {
   createdRencontres    Rencontre[]     @relation("CreatedBy")
   updatedRencontres    Rencontre[]     @relation("UpdatedBy")
 
+  @@index([conclaveId])
+  @@index([zoneId])
+  @@index([comiteId])
   @@map("users")
 }
 
-model Localite {
+model Conclave {
   id        String   @id @default(uuid())
   name      String   @unique
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  zones Zone[]
+  users User[]
+
+  @@map("conclaves")
+}
+
+model Zone {
+  id         String   @id @default(uuid())
+  name       String
+  conclaveId String?  @map("conclave_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  conclave Conclave? @relation(fields: [conclaveId], references: [id], onDelete: SetNull)
+  comites  Comite[]
+  users    User[]
+
+  @@index([conclaveId])
+  @@unique([conclaveId, name])
+  @@map("zones")
+}
+
+model Comite {
+  id        String   @id @default(uuid())
+  name      String
+  zoneId    String?  @map("zone_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  zone      Zone?      @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  localites Localite[]
+  users     User[]
+
+  @@index([zoneId])
+  @@unique([zoneId, name])
+  @@map("comites")
+}
+
+model Localite {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  comiteId  String?  @map("comite_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  comite       Comite?       @relation(fields: [comiteId], references: [id], onDelete: SetNull)
   sousLocalites SousLocalite[]
 
+  @@index([comiteId])
   @@map("localites")
 }
 
