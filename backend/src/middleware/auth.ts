@@ -62,6 +62,11 @@ export const authorize = (...roles: string[]) => {
       return;
     }
 
+    if (req.user.role === 'OWNER') {
+      next();
+      return;
+    }
+
     if (!roles.includes(req.user.role)) {
       res.status(403).json({ error: 'Accès non autorisé' });
       return;

@@ -14,6 +14,7 @@ const generateTempPassword = () => {
 };
 
 const canManageTargetUser = async (actor: { role: string; userId: string }, targetUserId: string) => {
+  if (actor.role === 'OWNER') return true;
   if (actor.role === 'LOCALITE') return true;
   if (actor.role !== 'SOUS_LOCALITE_ADMIN') return false;
 
@@ -41,6 +42,55 @@ const canManageTargetUser = async (actor: { role: string; userId: string }, targ
 
   return !!section && section.sousLocaliteId === admin.sousLocaliteId;
 };
+
+router.post('/bootstrap-owner', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const secretHeader = req.headers['x-owner-bootstrap-secret'];
+    const secret = Array.isArray(secretHeader) ? secretHeader[0] : secretHeader;
+    const expectedSecret = process.env.OWNER_BOOTSTRAP_SECRET;
+    const expectedEmail = (process.env.OWNER_BOOTSTRAP_EMAIL || 'tagartiste@gmail.com').trim().toLowerCase();
+
+    if (!expectedSecret || typeof expectedSecret !== 'string') {
+      res.status(500).json({ error: 'Bootstrap non configuré' });
+      return;
+    }
+
+    if (!secret || secret !== expectedSecret) {
+      res.status(403).json({ error: 'Accès non autorisé' });
+      return;
+    }
+
+    const email = String((req.body as any)?.email || '').trim().toLowerCase();
+    if (!email || email !== expectedEmail) {
+      res.status(400).json({ error: 'Email bootstrap invalide' });
+      return;
+    }
+
+    const existingOwnerCount = await prisma.user.count({ where: { role: 'OWNER' as any } });
+
+    if (existingOwnerCount > 0 && req.user?.role !== 'OWNER') {
+      res.status(403).json({ error: 'OWNER déjà initialisé' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      res.status(404).json({ error: 'Utilisateur non trouvé' });
+      return;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { role: 'OWNER' as any },
+      select: { id: true, email: true, name: true, role: true },
+    });
+
+    res.json({ message: 'Utilisateur promu OWNER', user: updated });
+  } catch (error) {
+    console.error('Erreur bootstrap-owner:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 router.get(
   '/',
