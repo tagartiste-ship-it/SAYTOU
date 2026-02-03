@@ -20,6 +20,7 @@ import usersRoutes from './routes/users.routes.js';
 import binomesRoutes from './routes/binomes.routes.js';
 import { startBinomesAutoRotationJob } from './routes/binomes.routes.js';
 import bureauRoutes from './routes/bureau.routes.js';
+import institutionsRoutes from './routes/institutions.routes.js';
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use('/api/rencontres', rencontresRoutes);
 app.use('/api/membres', membresRoutes);
 app.use('/api/tranches-age', tranchesAgeRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/institutions', institutionsRoutes);
 app.use('/api/binomes', binomesRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/bureau', bureauRoutes);
