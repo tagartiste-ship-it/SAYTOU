@@ -6,10 +6,29 @@
 -- the enum.
 
 
-ALTER TYPE "UserRole" ADD VALUE 'OWNER';
-ALTER TYPE "UserRole" ADD VALUE 'COMITE_ADMIN';
-ALTER TYPE "UserRole" ADD VALUE 'ZONE_ADMIN';
-ALTER TYPE "UserRole" ADD VALUE 'CONCLAVE_ADMIN';
+DO $$ BEGIN
+  ALTER TYPE "UserRole" ADD VALUE 'OWNER';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "UserRole" ADD VALUE 'COMITE_ADMIN';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "UserRole" ADD VALUE 'ZONE_ADMIN';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TYPE "UserRole" ADD VALUE 'CONCLAVE_ADMIN';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AlterTable
 ALTER TABLE "users" ADD COLUMN     "comite_id" TEXT,
