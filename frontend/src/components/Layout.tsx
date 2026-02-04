@@ -174,11 +174,12 @@ export default function Layout() {
     { name: 'Sections', href: '/sections', icon: Building2, roles: ['LOCALITE', 'SOUS_LOCALITE_ADMIN'] },
     { name: 'Types', href: '/types', icon: Tags },
     { name: 'Statistiques', href: '/stats', icon: BarChart3 },
+    { name: 'Institutions', href: '/institutions', icon: Building2, roles: ['OWNER'] },
   ];
 
   // Filtrer la navigation selon le rôle de l'utilisateur
   const navigation = baseNavigation.filter(item => 
-    !item.roles || item.roles.includes(user?.role || '')
+    user?.role === 'OWNER' || !item.roles || item.roles.includes(user?.role || '')
   );
 
   const isActive = (path: string) => location.pathname === path;
@@ -247,6 +248,7 @@ export default function Layout() {
                   <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.name}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
                   <p className="mt-1 text-xs font-medium text-primary dark:text-primary-400">
+                    {user?.role === 'OWNER' && 'OWNER'}
                     {user?.role === 'LOCALITE' && 'Super Admin'}
                     {user?.role === 'SOUS_LOCALITE_ADMIN' && 'Admin Sous-Localité'}
                     {user?.role === 'SECTION_USER' && 'Utilisateur Section'}
@@ -313,6 +315,7 @@ export default function Layout() {
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{user?.name}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">{user?.email}</p>
               <p className="mt-1 text-xs font-medium text-primary dark:text-primary-400">
+                {user?.role === 'OWNER' && 'OWNER'}
                 {user?.role === 'LOCALITE' && 'Super Admin'}
                 {user?.role === 'SOUS_LOCALITE_ADMIN' && 'Admin Sous-Localité'}
                 {user?.role === 'SECTION_USER' && 'Utilisateur Section'}

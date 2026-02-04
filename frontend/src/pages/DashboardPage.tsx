@@ -19,7 +19,7 @@ export default function DashboardPage() {
 
   const fetchStats = async () => {
     try {
-      if (user?.role === 'LOCALITE') {
+      if (user?.role === 'OWNER' || user?.role === 'LOCALITE') {
         const response = await api.get('/stats/global');
         setStats(response.data.statistiques);
       } else if (user?.role === 'SOUS_LOCALITE_ADMIN' && user.sousLocaliteId) {

@@ -1,4 +1,11 @@
-export type UserRole = 'LOCALITE' | 'SOUS_LOCALITE_ADMIN' | 'SECTION_USER';
+export type UserRole =
+  | 'OWNER'
+  | 'LOCALITE'
+  | 'COMITE_ADMIN'
+  | 'ZONE_ADMIN'
+  | 'CONCLAVE_ADMIN'
+  | 'SOUS_LOCALITE_ADMIN'
+  | 'SECTION_USER';
 
 export type ScopeType = 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION';
 

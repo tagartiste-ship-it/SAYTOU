@@ -18,7 +18,7 @@ export default function UsersPage() {
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | ''>('');
 
-  const canView = user?.role === 'LOCALITE' || user?.role === 'SOUS_LOCALITE_ADMIN';
+  const canView = user?.role === 'OWNER' || user?.role === 'LOCALITE' || user?.role === 'SOUS_LOCALITE_ADMIN';
 
   const isLocked = (u: User) => {
     if (!u.lockedUntil) return false;
@@ -112,12 +112,15 @@ export default function UsersPage() {
   };
 
   const roleLabel = (r: UserRole) => {
+    if (r === 'OWNER') return 'OWNER';
     if (r === 'LOCALITE') return 'Super Admin';
     if (r === 'SOUS_LOCALITE_ADMIN') return 'Admin Sous-Localité';
-    return 'Utilisateur Section';
+    if (r === 'SECTION_USER') return 'Utilisateur Section';
+    return r;
   };
 
   const roleBadgeVariant = (r: UserRole) => {
+    if (r === 'OWNER') return 'default';
     if (r === 'LOCALITE') return 'default';
     if (r === 'SOUS_LOCALITE_ADMIN') return 'accent';
     return 'secondary';

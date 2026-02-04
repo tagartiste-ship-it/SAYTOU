@@ -21,6 +21,7 @@ import ChangePasswordPage from './pages/ChangePasswordPage';
 import BinomesPage from './pages/BinomesPage';
 import PrintRencontrePage from './pages/PrintRencontrePage';
 import BureauPage from './pages/BureauPage';
+import InstitutionsPage from './pages/InstitutionsPage';
 
 // Layout
 import Layout from './components/Layout';
@@ -153,6 +154,7 @@ function App() {
           <Route path="stats" element={<StatsPage />} />
           <Route path="binomes" element={<BinomesPage />} />
           <Route path="bureau" element={<BureauPage />} />
+          <Route path="institutions" element={<InstitutionsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
