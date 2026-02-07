@@ -21,6 +21,94 @@ const generateTempPassword = () => {
   return crypto.randomBytes(24).toString('base64url').slice(0, TEMP_PASSWORD_LENGTH);
 };
 
+const ORG_UNIT_DEFINITIONS = [
+  // CELLULES (S3)
+  { kind: 'CELLULE' as const, code: 'CEOI', name: 'CEOI', rubrique: 'CELLULES_S3' as const },
+  { kind: 'CELLULE' as const, code: 'SANTE', name: 'Santé', rubrique: 'CELLULES_S3' as const },
+  { kind: 'CELLULE' as const, code: 'CORPORATIVE', name: 'Corporative', rubrique: 'CELLULES_S3' as const },
+  { kind: 'CELLULE' as const, code: 'SYNERGIE', name: 'Synergie', rubrique: 'CELLULES_S3' as const },
+  { kind: 'CELLULE' as const, code: 'ORGANISATION', name: 'Organisation', rubrique: 'CELLULES_S3' as const },
+  { kind: 'CELLULE' as const, code: 'SECURITE', name: 'Sécurité', rubrique: 'CELLULES_S3' as const },
+  { kind: 'CELLULE' as const, code: 'TECHNIQUE', name: 'Technique', rubrique: 'CELLULES_S3' as const },
+  { kind: 'CELLULE' as const, code: 'PERE_MERE', name: 'Père et Mère', rubrique: 'CELLULES_S3' as const },
+  { kind: 'CELLULE' as const, code: 'ACTION_SOCIALE', name: 'Action Sociale', rubrique: 'CELLULES_S3' as const },
+  { kind: 'CELLULE' as const, code: 'FEMININE', name: 'Féminine', rubrique: 'CELLULES_S3' as const },
+  { kind: 'CELLULE' as const, code: 'CSU', name: 'CSU', rubrique: 'CELLULES_S3' as const },
+  // COMMISSIONS (S1+S2)
+  { kind: 'COMMISSION' as const, code: 'PF', name: 'Point Focal (PF)', rubrique: 'COMMISSIONS_S1S2' as const },
+  { kind: 'COMMISSION' as const, code: 'CA', name: 'Commission Administrative (CA)', rubrique: 'COMMISSIONS_S1S2' as const },
+  {
+    kind: 'COMMISSION' as const,
+    code: 'CIPS',
+    name: 'Commission Intelligence et de Perception Spirituelle (CIPS)',
+    rubrique: 'COMMISSIONS_S1S2' as const,
+  },
+  { kind: 'COMMISSION' as const, code: 'SA', name: 'Skills Academy (SA)', rubrique: 'COMMISSIONS_S1S2' as const },
+  {
+    kind: 'COMMISSION' as const,
+    code: 'CTC',
+    name: 'Commission Trésor et Capacitation (CTC)',
+    rubrique: 'COMMISSIONS_S1S2' as const,
+  },
+  { kind: 'COMMISSION' as const, code: 'CL', name: 'Commission Logistique (CL)', rubrique: 'COMMISSIONS_S1S2' as const },
+];
+
+const bootstrapOrgUnitsForLocalite = async (localiteId: string): Promise<{ createdDefinitions: number; createdInstances: number }> => {
+  const upserted = [] as { id: string; kind: string; code: string }[];
+  for (const d of ORG_UNIT_DEFINITIONS) {
+    const row = await prisma.orgUnitDefinition.upsert({
+      where: { kind_code: { kind: d.kind as any, code: d.code } } as any,
+      update: {
+        name: d.name,
+        rubrique: d.rubrique as any,
+        isActive: true,
+      },
+      create: {
+        kind: d.kind as any,
+        code: d.code,
+        name: d.name,
+        rubrique: d.rubrique as any,
+        isActive: true,
+      },
+      select: { id: true, kind: true, code: true },
+    });
+    upserted.push(row);
+  }
+
+  const sectionIds = await getLocaliteScopeSectionIds(localiteId);
+  const instanceRows: { definitionId: string; scopeType: any; scopeId: string }[] = [];
+  for (const def of upserted) {
+    instanceRows.push({ definitionId: def.id, scopeType: 'LOCALITE', scopeId: localiteId });
+    for (const sid of sectionIds) {
+      instanceRows.push({ definitionId: def.id, scopeType: 'SECTION', scopeId: sid });
+    }
+  }
+
+  const before = await prisma.orgUnitInstance.count({
+    where: {
+      OR: [{ scopeType: 'LOCALITE', scopeId: localiteId }, { scopeType: 'SECTION', scopeId: { in: sectionIds } }],
+    },
+  });
+
+  if (instanceRows.length) {
+    await prisma.orgUnitInstance.createMany({
+      data: instanceRows,
+      skipDuplicates: true,
+    });
+  }
+
+  const after = await prisma.orgUnitInstance.count({
+    where: {
+      OR: [{ scopeType: 'LOCALITE', scopeId: localiteId }, { scopeType: 'SECTION', scopeId: { in: sectionIds } }],
+    },
+  });
+
+  return {
+    createdDefinitions: upserted.length,
+    createdInstances: Math.max(0, after - before),
+  };
+};
+
 const getLocaliteScopeSectionIds = async (localiteId: string): Promise<string[]> => {
   const sections = await prisma.section.findMany({
     where: {
@@ -854,6 +942,22 @@ router.get('/instances', authorize('LOCALITE'), async (req: AuthRequest, res: Re
     const localiteId = await ensureLocaliteActor(req, res);
     if (!localiteId) return;
 
+    // Auto-bootstrap (idempotent) si aucune instance n'existe encore pour cette localité.
+    const sectionIdsForScope = await getLocaliteScopeSectionIds(localiteId);
+    const existingCount = await prisma.orgUnitInstance.count({
+      where: {
+        OR: [
+          { scopeType: 'LOCALITE' as any, scopeId: localiteId },
+          ...(sectionIdsForScope.length
+            ? [{ scopeType: 'SECTION' as any, scopeId: { in: sectionIdsForScope } }]
+            : []),
+        ],
+      },
+    });
+    if (existingCount === 0) {
+      await bootstrapOrgUnitsForLocalite(localiteId);
+    }
+
     const kind = String(req.query.kind ?? '').trim().toUpperCase();
     const scopeType = String(req.query.scopeType ?? '').trim().toUpperCase();
 
@@ -924,6 +1028,19 @@ router.get('/instances', authorize('LOCALITE'), async (req: AuthRequest, res: Re
   } catch (error) {
     console.error('Erreur org-units/instances:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des instances' });
+  }
+});
+
+router.post('/bootstrap', authorize('LOCALITE'), async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const localiteId = await ensureLocaliteActor(req, res);
+    if (!localiteId) return;
+
+    const result = await bootstrapOrgUnitsForLocalite(localiteId);
+    res.json({ message: 'Bootstrap effectué', ...result });
+  } catch (error) {
+    console.error('Erreur org-units/bootstrap:', error);
+    res.status(500).json({ error: 'Erreur lors du bootstrap Cellules/Commissions' });
   }
 });
 
