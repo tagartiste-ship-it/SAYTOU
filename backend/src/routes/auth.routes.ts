@@ -242,11 +242,16 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     }
 
     // Générer les tokens
+    const derivedLocaliteId =
+      ((user as any).localiteId as string | null | undefined) ??
+      ((user as any).sousLocalite?.localiteId as string | null | undefined) ??
+      ((user as any).section?.sousLocalite?.localiteId as string | null | undefined) ??
+      null;
     const payload = {
       userId: user.id,
       email: user.email,
       role: user.role,
-      localiteId: (user as any).localiteId ?? null,
+      localiteId: derivedLocaliteId,
       sectionId: user.sectionId,
       sousLocaliteId: user.sousLocaliteId,
     };
@@ -269,7 +274,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
         email: user.email,
         name: user.name,
         role: user.role,
-        localiteId: (user as any).localiteId ?? null,
+        localiteId: derivedLocaliteId,
         sousLocaliteId: user.sousLocaliteId,
         sectionId: user.sectionId,
         mustChangePassword: (user as any).mustChangePassword ?? false,
@@ -327,12 +332,27 @@ router.post('/refresh', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const actor = await (prisma.user as any).findUnique({
+      where: { id: user.id },
+      select: {
+        localiteId: true,
+        sousLocalite: { select: { localiteId: true } },
+        section: { select: { sousLocalite: { select: { localiteId: true } } } },
+      },
+    });
+
+    const derivedLocaliteId =
+      ((actor as any)?.localiteId as string | null | undefined) ??
+      ((actor as any)?.sousLocalite?.localiteId as string | null | undefined) ??
+      ((actor as any)?.section?.sousLocalite?.localiteId as string | null | undefined) ??
+      null;
+
     // Générer un nouveau access token
     const payload = {
       userId: user.id,
       email: user.email,
       role: user.role,
-      localiteId: (user as any).localiteId ?? null,
+      localiteId: derivedLocaliteId,
       sousLocaliteId: (user as any).sousLocaliteId ?? null,
       sectionId: (user as any).sectionId ?? null,
     };
