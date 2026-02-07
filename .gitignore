@@ -52,5 +52,8 @@ backend/temp/
 .temp/
 tmp/
 
+# Temporary backend scripts
+backend/tmp_*
+
 # Local Netlify folder
 .netlify

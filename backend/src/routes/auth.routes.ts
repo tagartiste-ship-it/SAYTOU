@@ -188,6 +188,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     const user = await prisma.user.findUnique({
       where: { email },
       include: {
+        localite: true,
         sousLocalite: true,
         section: {
           include: {
@@ -245,6 +246,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       userId: user.id,
       email: user.email,
       role: user.role,
+      localiteId: (user as any).localiteId ?? null,
       sectionId: user.sectionId,
       sousLocaliteId: user.sousLocaliteId,
     };
@@ -267,9 +269,11 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
         email: user.email,
         name: user.name,
         role: user.role,
+        localiteId: (user as any).localiteId ?? null,
         sousLocaliteId: user.sousLocaliteId,
         sectionId: user.sectionId,
         mustChangePassword: (user as any).mustChangePassword ?? false,
+        localite: (user as any).localite ?? null,
         sousLocalite: user.sousLocalite,
         section: user.section,
       },
@@ -328,6 +332,9 @@ router.post('/refresh', async (req: Request, res: Response): Promise<void> => {
       userId: user.id,
       email: user.email,
       role: user.role,
+      localiteId: (user as any).localiteId ?? null,
+      sousLocaliteId: (user as any).sousLocaliteId ?? null,
+      sectionId: (user as any).sectionId ?? null,
     };
 
     const accessToken = generateAccessToken(payload);
@@ -389,9 +396,16 @@ router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise
         email: true,
         name: true,
         role: true,
+        localiteId: true,
         sousLocaliteId: true,
         sectionId: true,
         mustChangePassword: true,
+        localite: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         sousLocalite: {
           select: {
             id: true,

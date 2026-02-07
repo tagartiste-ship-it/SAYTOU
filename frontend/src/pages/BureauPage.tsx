@@ -3,8 +3,9 @@ import { toast } from 'sonner';
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import type { Localite, Membre } from '../lib/types';
+import { useSearchParams } from 'react-router-dom';
 
-type BureauScopeType = 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION';
+type BureauScopeType = 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION' | 'ORG_UNIT_INSTANCE';
 type BureauGroupe = 'S1S2' | 'S3';
 type BureauAffectationKind = 'TITULAIRE' | 'ADJOINT';
 type BureauSlotType = 'PRIMARY' | 'EXTRA';
@@ -50,6 +51,7 @@ const buildSlots = (poste: BureauPoste, kind: BureauAffectationKind) => {
 
 export default function BureauPage() {
   const { user } = useAuthStore();
+  const [searchParams] = useSearchParams();
 
   const [groupe, setGroupe] = useState<BureauGroupe>('S1S2');
   const [scopeType, setScopeType] = useState<BureauScopeType>('SECTION');
@@ -67,6 +69,17 @@ export default function BureauPage() {
   useEffect(() => {
     if (!user) return;
 
+    if (user.role === 'ORG_UNIT_RESP') {
+      const qsScopeType = String(searchParams.get('scopeType') ?? '').trim().toUpperCase();
+      const qsScopeId = String(searchParams.get('scopeId') ?? '').trim();
+      const qsGroupe = String(searchParams.get('groupe') ?? '').trim().toUpperCase();
+
+      setScopeType(qsScopeType === 'ORG_UNIT_INSTANCE' ? 'ORG_UNIT_INSTANCE' : 'ORG_UNIT_INSTANCE');
+      setScopeId(qsScopeId);
+      if (qsGroupe === 'S1S2' || qsGroupe === 'S3') setGroupe(qsGroupe as any);
+      return;
+    }
+
     if (user.role === 'SECTION_USER') {
       setScopeType('SECTION');
       setScopeId(user.sectionId ?? '');
@@ -81,7 +94,7 @@ export default function BureauPage() {
 
     setScopeType('LOCALITE');
     setScopeId('');
-  }, [user]);
+  }, [searchParams, user]);
 
   useEffect(() => {
     const loadLocalites = async () => {

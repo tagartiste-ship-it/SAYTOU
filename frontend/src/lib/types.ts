@@ -5,7 +5,8 @@ export type UserRole =
   | 'ZONE_ADMIN'
   | 'CONCLAVE_ADMIN'
   | 'SOUS_LOCALITE_ADMIN'
-  | 'SECTION_USER';
+  | 'SECTION_USER'
+  | 'ORG_UNIT_RESP';
 
 export type ScopeType = 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION';
 
@@ -19,8 +20,10 @@ export interface User {
   email: string;
   name: string;
   role: UserRole;
+  localiteId?: string | null;
   sousLocaliteId?: string | null;
   sectionId?: string | null;
+  localite?: Localite | null;
   sousLocalite?: SousLocalite | null;
   section?: Section | null;
   failedLoginAttempts?: number;

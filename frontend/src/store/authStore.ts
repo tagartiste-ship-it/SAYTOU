@@ -44,8 +44,12 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           });
         } catch (error: any) {
+          const networkMessage =
+            error?.code === 'ERR_NETWORK' || !error?.response
+              ? 'Impossible de joindre le serveur (API). Vérifie que le backend est démarré.'
+              : null;
           set({
-            error: error.response?.data?.error || 'Erreur de connexion',
+            error: error.response?.data?.error || networkMessage || 'Erreur de connexion',
             isLoading: false,
           });
           throw error;

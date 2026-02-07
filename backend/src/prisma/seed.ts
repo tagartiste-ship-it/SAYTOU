@@ -6,6 +6,8 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Début du seed...');
 
+  const isProd = process.env.NODE_ENV === 'production';
+
   // Créer les tranches d'âge (distinctes des Sections)
   const tranchesAge = [
     { name: 'S1', ageMin: 0, ageMax: 12, order: 1, legacyName: '0-12' },
@@ -83,6 +85,88 @@ async function main() {
   }
   console.log(`✅ ${types.length} types de rencontre créés`);
 
+  // Cellules & Commissions (référentiel institutionnel, réel en DB)
+  // Seed idempotent : upsert par (kind, code)
+  console.log('🏛️ Seed du référentiel Cellules/Commissions...');
+  const orgUnitDefinitions = [
+    // CELLULES (S3)
+    { kind: 'CELLULE' as const, code: 'CEOI', name: 'CEOI', rubrique: 'CELLULES_S3' as const },
+    { kind: 'CELLULE' as const, code: 'SANTE', name: 'Santé', rubrique: 'CELLULES_S3' as const },
+    { kind: 'CELLULE' as const, code: 'CORPORATIVE', name: 'Corporative', rubrique: 'CELLULES_S3' as const },
+    { kind: 'CELLULE' as const, code: 'SYNERGIE', name: 'Synergie', rubrique: 'CELLULES_S3' as const },
+    { kind: 'CELLULE' as const, code: 'ORGANISATION', name: 'Organisation', rubrique: 'CELLULES_S3' as const },
+    { kind: 'CELLULE' as const, code: 'SECURITE', name: 'Sécurité', rubrique: 'CELLULES_S3' as const },
+    { kind: 'CELLULE' as const, code: 'TECHNIQUE', name: 'Technique', rubrique: 'CELLULES_S3' as const },
+    { kind: 'CELLULE' as const, code: 'PERE_MERE', name: 'Père et Mère', rubrique: 'CELLULES_S3' as const },
+    { kind: 'CELLULE' as const, code: 'ACTION_SOCIALE', name: 'Action Sociale', rubrique: 'CELLULES_S3' as const },
+    { kind: 'CELLULE' as const, code: 'FEMININE', name: 'Féminine', rubrique: 'CELLULES_S3' as const },
+    { kind: 'CELLULE' as const, code: 'CSU', name: 'CSU', rubrique: 'CELLULES_S3' as const },
+    // COMMISSIONS (S1+S2)
+    { kind: 'COMMISSION' as const, code: 'PF', name: 'Point Focal (PF)', rubrique: 'COMMISSIONS_S1S2' as const },
+    { kind: 'COMMISSION' as const, code: 'CA', name: 'Commission Administrative (CA)', rubrique: 'COMMISSIONS_S1S2' as const },
+    { kind: 'COMMISSION' as const, code: 'CIPS', name: 'Commission Intelligence et de Perception Spirituelle (CIPS)', rubrique: 'COMMISSIONS_S1S2' as const },
+    { kind: 'COMMISSION' as const, code: 'SA', name: 'Skills Academy (SA)', rubrique: 'COMMISSIONS_S1S2' as const },
+    { kind: 'COMMISSION' as const, code: 'CTC', name: 'Commission Trésor et Capacitation (CTC)', rubrique: 'COMMISSIONS_S1S2' as const },
+    { kind: 'COMMISSION' as const, code: 'CL', name: 'Commission Logistique (CL)', rubrique: 'COMMISSIONS_S1S2' as const },
+  ];
+
+  const upserted = [] as { id: string; kind: string; code: string }[];
+  for (const d of orgUnitDefinitions) {
+    const row = await prisma.orgUnitDefinition.upsert({
+      where: { kind_code: { kind: d.kind as any, code: d.code } } as any,
+      update: {
+        name: d.name,
+        rubrique: d.rubrique as any,
+        isActive: true,
+      },
+      create: {
+        kind: d.kind as any,
+        code: d.code,
+        name: d.name,
+        rubrique: d.rubrique as any,
+        isActive: true,
+      },
+      select: { id: true, kind: true, code: true },
+    });
+    upserted.push(row);
+  }
+  console.log(`✅ ${upserted.length} définitions Cellules/Commissions en base`);
+
+  const syncOrgUnitInstances = async () => {
+    // Instances auto pour toutes les Localités + Sections (idempotent)
+    console.log('🔗 Génération des instances Cellules/Commissions (Localités + Sections)...');
+    const [localitesAll, sectionsAll] = await Promise.all([
+      prisma.localite.findMany({ select: { id: true } }),
+      prisma.section.findMany({ select: { id: true } }),
+    ]);
+
+    const instanceRows: { definitionId: string; scopeType: any; scopeId: string }[] = [];
+    for (const def of upserted) {
+      for (const l of localitesAll) {
+        instanceRows.push({ definitionId: def.id, scopeType: 'LOCALITE', scopeId: l.id });
+      }
+      for (const s of sectionsAll) {
+        instanceRows.push({ definitionId: def.id, scopeType: 'SECTION', scopeId: s.id });
+      }
+    }
+
+    if (instanceRows.length > 0) {
+      // Batch insert; skipDuplicates relies on the unique index (definitionId, scopeType, scopeId)
+      await prisma.orgUnitInstance.createMany({
+        data: instanceRows,
+        skipDuplicates: true,
+      });
+    }
+    console.log(`✅ Instances traitées: ${instanceRows.length} (idempotent)`);
+  };
+
+  await syncOrgUnitInstances();
+
+  if (isProd) {
+    console.log('🔒 Mode production: seed terminé (aucune donnée demo/test créée).');
+    return;
+  }
+
   // Créer l'utilisateur LOCALITÉ (Super Admin)
   const passwordHash = await bcrypt.hash('ChangeMe123!', 10);
   
@@ -102,13 +186,21 @@ async function main() {
   // Créer une localité exemple
   console.log('🏛️ Création de localité exemple...');
   const localite = await prisma.localite.upsert({
-    where: { name: 'Localité Exemple' },
+    where: { name: 'Mbour' },
     update: {},
     create: {
-      name: 'Localité Exemple',
+      name: 'Mbour',
     },
   });
   console.log('✅ Localité créée');
+
+  // Rattacher le compte LOCALITÉ à sa localité (scoping)
+  await prisma.user.update({
+    where: { id: localiteUser.id },
+    data: {
+      localiteId: localite.id,
+    },
+  });
 
   // Créer une sous-localité exemple
   console.log('🏢 Création de sous-localité exemple...');
@@ -153,6 +245,9 @@ async function main() {
     },
   });
   console.log('✅ Section créée');
+
+  // Re-sync des instances après création demo (Mbour + section)
+  await syncOrgUnitInstances();
 
   // Créer un utilisateur de section
   const userPasswordHash = await bcrypt.hash('User123!', 10);

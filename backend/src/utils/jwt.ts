@@ -5,6 +5,9 @@ export interface JwtPayload {
   userId: string;
   email: string;
   role: string;
+  localiteId?: string | null;
+  sousLocaliteId?: string | null;
+  sectionId?: string | null;
 }
 
 export const generateAccessToken = (payload: JwtPayload): string => {

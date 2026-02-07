@@ -4,7 +4,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
-type BureauScopeType = 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION';
+type BureauScopeType = 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION' | 'ORG_UNIT_INSTANCE';
 type BureauGroupe = 'S1S2' | 'S3';
 type BureauAffectationKind = 'TITULAIRE' | 'ADJOINT';
 type BureauSlotType = 'PRIMARY' | 'EXTRA';
@@ -44,7 +44,7 @@ const resolveMembreTranche = (m: { ageTranche?: unknown; dateNaissance?: Date | 
 
 const parseScopeType = (value: unknown): BureauScopeType | null => {
   const v = String(value ?? '').trim().toUpperCase();
-  if (v === 'LOCALITE' || v === 'SOUS_LOCALITE' || v === 'SECTION') return v as BureauScopeType;
+  if (v === 'LOCALITE' || v === 'SOUS_LOCALITE' || v === 'SECTION' || v === 'ORG_UNIT_INSTANCE') return v as BureauScopeType;
   return null;
 };
 
@@ -52,6 +52,9 @@ const buildScopeWhere = (scopeType: BureauScopeType, scopeId: string) => {
   if (scopeType === 'SECTION') return { sectionId: scopeId };
   if (scopeType === 'SOUS_LOCALITE') {
     return { section: { sousLocaliteId: scopeId } };
+  }
+  if (scopeType === 'ORG_UNIT_INSTANCE') {
+    return { orgUnitMemberships: { some: { instanceId: scopeId } } };
   }
   return { section: { sousLocalite: { localiteId: scopeId } } };
 };
@@ -94,6 +97,24 @@ const resolveScope = async (
     return { scopeType: 'SOUS_LOCALITE', scopeId: user.sousLocaliteId };
   }
 
+  if (user.role === 'ORG_UNIT_RESP') {
+    // Doit spécifier une instance (cellule/commission) et être assigné à celle-ci.
+    const scopeType = requestedScopeType ?? null;
+    if (scopeType !== 'ORG_UNIT_INSTANCE') return null;
+    if (!scopeIdFromQuery) return null;
+
+    const assignment = await prisma.orgUnitAssignment.findFirst({
+      where: {
+        userId: user.userId,
+        instanceId: scopeIdFromQuery,
+      },
+      select: { id: true },
+    });
+
+    if (!assignment) return null;
+    return { scopeType: 'ORG_UNIT_INSTANCE', scopeId: scopeIdFromQuery };
+  }
+
   // LOCALITE (super admin)
   const scopeType = requestedScopeType ?? 'LOCALITE';
   if (scopeType === 'LOCALITE') {
@@ -117,6 +138,12 @@ const buildMembreWhereForScope = (scopeType: BureauScopeType, scopeId: string, g
 
   if (scopeType === 'SECTION') {
     return { AND: [{ sectionId: scopeId }, ageTrancheFilter] };
+  }
+
+  if (scopeType === 'ORG_UNIT_INSTANCE') {
+    // Résolution effectuée dans la route /eligible-membres.
+    // Ici on renvoie juste un filtre d'âge pour éviter un where Prisma incorrect.
+    return ageTrancheFilter;
   }
 
   if (scopeType === 'SOUS_LOCALITE') {
@@ -255,8 +282,26 @@ router.get('/eligible-membres', authenticate, async (req: AuthRequest, res: Resp
     const resolved = await resolveScope(req, scopeTypeReq, req.query.scopeId);
     if (!resolved) return res.status(400).json({ error: 'Scope invalide' });
 
+    // Pour ORG_UNIT_INSTANCE: on résout l'instance pour obtenir sa portée réelle (LOCALITE ou SECTION).
+    let effectiveScopeType: BureauScopeType = resolved.scopeType;
+    let effectiveScopeId: string = resolved.scopeId;
+    if (resolved.scopeType === 'ORG_UNIT_INSTANCE') {
+      const instance = await prisma.orgUnitInstance.findUnique({
+        where: { id: resolved.scopeId },
+        select: { scopeType: true, scopeId: true },
+      });
+
+      if (!instance) return res.status(404).json({ error: 'Instance non trouvée' });
+      if (instance.scopeType !== 'LOCALITE' && instance.scopeType !== 'SECTION') {
+        return res.status(400).json({ error: 'ScopeType instance invalide' });
+      }
+
+      effectiveScopeType = instance.scopeType as BureauScopeType;
+      effectiveScopeId = instance.scopeId;
+    }
+
     const membresRaw: any[] = await prisma.membre.findMany({
-      where: buildScopeWhere(resolved.scopeType, resolved.scopeId),
+      where: buildMembreWhereForScope(effectiveScopeType, effectiveScopeId, groupe),
       select: {
         id: true,
         prenom: true,

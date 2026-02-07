@@ -18,12 +18,137 @@ export default function UsersPage() {
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | ''>('');
 
+  type OrgUnitScopeType = 'LOCALITE' | 'SECTION';
+  type OrgUnitKind = 'CELLULE' | 'COMMISSION';
+  type OrgUnitRubrique = 'CELLULES_S3' | 'COMMISSIONS_S1S2';
+
+  interface OrgUnitInstanceRow {
+    id: string;
+    scopeType: OrgUnitScopeType;
+    scopeId: string;
+    isVisible: boolean;
+    definition: {
+      id: string;
+      kind: OrgUnitKind;
+      code: string;
+      name: string;
+      rubrique: OrgUnitRubrique;
+    };
+    assignments: {
+      id: string;
+      positionIndex: number;
+      user: {
+        id: string;
+        email: string;
+        name: string;
+        role: string;
+        localiteId?: string | null;
+      };
+    }[];
+  }
+
+  const isLocalite = user?.role === 'LOCALITE';
+
+  const [respEmail, setRespEmail] = useState('');
+  const [respName, setRespName] = useState('');
+  const [responsables, setResponsables] = useState<User[]>([]);
+  const [instances, setInstances] = useState<OrgUnitInstanceRow[]>([]);
+  const [isLoadingOrgUnits, setIsLoadingOrgUnits] = useState(false);
+  const [selectedResponsableId, setSelectedResponsableId] = useState('');
+  const [selectedInstanceId, setSelectedInstanceId] = useState('');
+
   const canView = user?.role === 'OWNER' || user?.role === 'LOCALITE' || user?.role === 'SOUS_LOCALITE_ADMIN';
 
   const isLocked = (u: User) => {
     if (!u.lockedUntil) return false;
     const t = new Date(u.lockedUntil).getTime();
     return Number.isFinite(t) && t > Date.now();
+  };
+
+  const fetchOrgUnitsData = async () => {
+    if (!isLocalite) return;
+    setIsLoadingOrgUnits(true);
+    try {
+      const [respRes, instRes] = await Promise.all([
+        api.get<{ users: User[] }>('/org-units/responsables'),
+        api.get<{ instances: OrgUnitInstanceRow[] }>('/org-units/instances'),
+      ]);
+      setResponsables(respRes.data.users || []);
+      setInstances(instRes.data.instances || []);
+    } catch (error: any) {
+      console.error('Erreur chargement org-units:', error);
+      toast.error(error.response?.data?.error || 'Erreur lors du chargement des responsables');
+      setResponsables([]);
+      setInstances([]);
+    } finally {
+      setIsLoadingOrgUnits(false);
+    }
+  };
+
+  const createResponsable = async () => {
+    if (!isLocalite) return;
+    const email = respEmail.trim().toLowerCase();
+    const name = respName.trim();
+    if (!email || !email.includes('@')) {
+      toast.error('Email invalide');
+      return;
+    }
+    if (!name) {
+      toast.error('Nom requis');
+      return;
+    }
+
+    try {
+      const res = await api.post<{ message: string; user: User; tempPassword: string }>('/org-units/responsables', {
+        email,
+        name,
+      });
+      const pwd = res.data?.tempPassword;
+      if (pwd) {
+        window.prompt('Mot de passe temporaire (copie-le et transmets-le au responsable):', pwd);
+        try {
+          await navigator.clipboard.writeText(pwd);
+        } catch {
+        }
+      }
+      toast.success('Responsable créé');
+      setRespEmail('');
+      setRespName('');
+      await fetchOrgUnitsData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Erreur création responsable');
+    }
+  };
+
+  const assignResponsable = async () => {
+    if (!isLocalite) return;
+    if (!selectedResponsableId || !selectedInstanceId) {
+      toast.error('Choisir un responsable et une unité');
+      return;
+    }
+    try {
+      await api.post('/org-units/assignments', {
+        userId: selectedResponsableId,
+        instanceId: selectedInstanceId,
+        positionIndex: 0,
+      });
+      toast.success('Assignation enregistrée');
+      await fetchOrgUnitsData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Erreur assignation');
+    }
+  };
+
+  const unassignResponsable = async (instanceId: string, userId: string) => {
+    if (!isLocalite) return;
+    if (!confirm('Désassigner ce responsable ?')) return;
+    try {
+      await api.delete('/org-units/assignments', { data: { instanceId, userId } });
+      toast.success('Désassigné');
+      await fetchOrgUnitsData();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Erreur désassignation');
+    }
   };
 
   const unlockUser = async (u: User) => {
@@ -91,6 +216,11 @@ export default function UsersPage() {
   }, []);
 
   useEffect(() => {
+    fetchOrgUnitsData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.role, user?.localiteId]);
+
+  useEffect(() => {
     const t = window.setTimeout(() => {
       fetchUsers();
     }, 350);
@@ -116,6 +246,7 @@ export default function UsersPage() {
     if (r === 'LOCALITE') return 'Super Admin';
     if (r === 'SOUS_LOCALITE_ADMIN') return 'Admin Sous-Localité';
     if (r === 'SECTION_USER') return 'Utilisateur Section';
+    if (r === 'ORG_UNIT_RESP') return 'Resp Cellule/Commission';
     return r;
   };
 
@@ -188,8 +319,139 @@ export default function UsersPage() {
           <option value="LOCALITE">LOCALITE</option>
           <option value="SOUS_LOCALITE_ADMIN">SOUS_LOCALITE_ADMIN</option>
           <option value="SECTION_USER">SECTION_USER</option>
+          <option value="ORG_UNIT_RESP">ORG_UNIT_RESP</option>
         </select>
       </motion.div>
+
+      {isLocalite ? (
+        <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Responsables Cellules/Commissions</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Créer des comptes ORG_UNIT_RESP (scope: ta localité)</p>
+              </div>
+              <Badge variant="default">{responsables.length}</Badge>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input value={respName} onChange={(e) => setRespName(e.target.value)} placeholder="Nom du responsable" />
+              <Input value={respEmail} onChange={(e) => setRespEmail(e.target.value)} placeholder="Email (ex: resp@saytou.test)" />
+            </div>
+
+            <div className="mt-3">
+              <Button onClick={createResponsable} disabled={isLoadingOrgUnits} className="w-full">
+                Créer un responsable
+              </Button>
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {isLoadingOrgUnits ? (
+                <div className="text-sm text-gray-600 dark:text-gray-400">Chargement...</div>
+              ) : responsables.length === 0 ? (
+                <div className="text-sm text-gray-600 dark:text-gray-400">Aucun responsable.</div>
+              ) : (
+                responsables.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{r.name}</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 truncate">{r.email}</div>
+                    </div>
+                    <Badge variant="secondary">{r.mustChangePassword ? 'MDP à changer' : 'OK'}</Badge>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Assignations</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Assigner un responsable à une cellule/commission</p>
+              </div>
+              <Badge variant="default">{instances.length}</Badge>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <select
+                value={selectedResponsableId}
+                onChange={(e) => setSelectedResponsableId(e.target.value)}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="">Choisir un responsable</option>
+                {responsables.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} ({r.email})
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={selectedInstanceId}
+                onChange={(e) => setSelectedInstanceId(e.target.value)}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="">Choisir une unité</option>
+                {instances.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.definition.kind} - {i.definition.name} ({i.definition.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-3">
+              <Button onClick={assignResponsable} disabled={isLoadingOrgUnits} className="w-full">
+                Assigner
+              </Button>
+            </div>
+
+            <div className="mt-4 space-y-2 max-h-80 overflow-auto pr-1">
+              {isLoadingOrgUnits ? (
+                <div className="text-sm text-gray-600 dark:text-gray-400">Chargement...</div>
+              ) : instances.length === 0 ? (
+                <div className="text-sm text-gray-600 dark:text-gray-400">Aucune unité.</div>
+              ) : (
+                instances.map((i) => (
+                  <div key={i.id} className="rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {i.definition.kind} - {i.definition.name}
+                        </div>
+                        <div className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                          {i.scopeType} • {i.definition.code}
+                        </div>
+                      </div>
+                      <Badge variant="secondary">{i.assignments?.length || 0}</Badge>
+                    </div>
+
+                    {i.assignments?.length ? (
+                      <div className="mt-2 space-y-1">
+                        {i.assignments.map((a) => (
+                          <div key={a.id} className="flex items-center justify-between gap-2 text-sm">
+                            <div className="min-w-0 truncate text-gray-900 dark:text-gray-100">
+                              {a.user.name} ({a.user.email})
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => unassignResponsable(i.id, a.user.id)}
+                            >
+                              Retirer
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </motion.div>
+      ) : null}
 
       <motion.div variants={itemVariants}>
         <Card className="p-0 overflow-x-auto">

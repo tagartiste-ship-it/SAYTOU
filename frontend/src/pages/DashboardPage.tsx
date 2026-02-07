@@ -25,6 +25,8 @@ export default function DashboardPage() {
       } else if (user?.role === 'SOUS_LOCALITE_ADMIN' && user.sousLocaliteId) {
         const response = await api.get(`/stats/sous-localite/${user.sousLocaliteId}`);
         setStats(response.data.statistiques);
+      } else if (user?.role === 'ORG_UNIT_RESP') {
+        setStats(null);
       } else if (user?.sectionId) {
         const response = await api.get(`/stats/section/${user.sectionId}`);
         setStats(response.data.statistiques);
@@ -248,6 +250,7 @@ export default function DashboardPage() {
                 {user?.role === 'LOCALITE' && 'Super Admin (LOCALITÉ)'}
                 {user?.role === 'SOUS_LOCALITE_ADMIN' && 'Admin Sous-Localité'}
                 {user?.role === 'SECTION_USER' && 'Utilisateur Section'}
+                {user?.role === 'ORG_UNIT_RESP' && 'Resp Cellule/Commission'}
               </p>
             </div>
             
@@ -261,7 +264,7 @@ export default function DashboardPage() {
                   <div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">Localité</p>
                     <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                      La Localité de Mbour
+                      {user?.localite?.name ? `La Localité de ${user.localite.name}` : '—'}
                     </p>
                   </div>
                 </div>

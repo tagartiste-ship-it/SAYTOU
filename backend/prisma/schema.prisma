@@ -18,6 +18,7 @@ enum UserRole {
   CONCLAVE_ADMIN
   SOUS_LOCALITE_ADMIN
   SECTION_USER
+  ORG_UNIT_RESP
 }
 
 enum ScopeType {
@@ -30,6 +31,7 @@ enum BureauScopeType {
   LOCALITE
   SOUS_LOCALITE
   SECTION
+  ORG_UNIT_INSTANCE
 }
 
 enum BureauGroupe {
@@ -47,12 +49,28 @@ enum BureauSlotType {
   EXTRA
 }
 
+enum OrgUnitKind {
+  CELLULE
+  COMMISSION
+}
+
+enum OrgUnitRubrique {
+  CELLULES_S3
+  COMMISSIONS_S1S2
+}
+
+enum OrgUnitScopeType {
+  LOCALITE
+  SECTION
+}
+
 model User {
   id                  String    @id @default(uuid())
   email               String    @unique
   passwordHash        String    @map("password_hash")
   role                UserRole
   name                String
+  localiteId           String?   @map("localite_id")
   conclaveId           String?   @map("conclave_id")
   zoneId               String?   @map("zone_id")
   comiteId             String?   @map("comite_id")
@@ -65,6 +83,7 @@ model User {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
+  localite    Localite?    @relation(fields: [localiteId], references: [id], onDelete: SetNull)
   conclave    Conclave?    @relation(fields: [conclaveId], references: [id], onDelete: SetNull)
   zone        Zone?        @relation(fields: [zoneId], references: [id], onDelete: SetNull)
   comite      Comite?      @relation(fields: [comiteId], references: [id], onDelete: SetNull)
@@ -77,6 +96,9 @@ model User {
   createdRencontres    Rencontre[]     @relation("CreatedBy")
   updatedRencontres    Rencontre[]     @relation("UpdatedBy")
 
+  orgUnitAssignments OrgUnitAssignment[]
+
+  @@index([localiteId])
   @@index([conclaveId])
   @@index([zoneId])
   @@index([comiteId])
@@ -136,6 +158,7 @@ model Localite {
 
   comite       Comite?       @relation(fields: [comiteId], references: [id], onDelete: SetNull)
   sousLocalites SousLocalite[]
+  users       User[]
 
   @@index([comiteId])
   @@map("localites")
@@ -175,6 +198,104 @@ model Section {
   @@map("sections")
 }
 
+model OrgUnitDefinition {
+  id        String         @id @default(uuid())
+  kind      OrgUnitKind
+  code      String
+  name      String
+  rubrique  OrgUnitRubrique
+  isActive  Boolean        @default(true) @map("is_active")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  instances OrgUnitInstance[]
+  pvConfig  OrgUnitPvConfig?
+
+  @@unique([kind, code])
+  @@index([rubrique])
+  @@index([isActive])
+  @@map("org_unit_definitions")
+}
+
+model OrgUnitPvConfig {
+  id           String   @id @default(uuid())
+  definitionId String   @unique @map("definition_id")
+  fields       Json     @map("fields")
+  typeIds      Json?    @map("type_ids")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  definition OrgUnitDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+
+  @@index([definitionId])
+  @@map("org_unit_pv_configs")
+}
+
+model OrgUnitInstance {
+  id           String           @id @default(uuid())
+  definitionId String           @map("definition_id")
+  scopeType    OrgUnitScopeType @map("scope_type")
+  scopeId      String           @map("scope_id")
+  isVisible    Boolean          @default(true) @map("is_visible")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  definition OrgUnitDefinition @relation(fields: [definitionId], references: [id], onDelete: Cascade)
+  assignments OrgUnitAssignment[]
+  members     OrgUnitMember[]
+  pv          OrgUnitPv?
+
+  @@index([definitionId])
+  @@index([scopeType])
+  @@index([scopeId])
+  @@unique([definitionId, scopeType, scopeId])
+  @@map("org_unit_instances")
+}
+
+model OrgUnitPv {
+  id         String   @id @default(uuid())
+  instanceId String   @unique @map("instance_id")
+  content    String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  instance OrgUnitInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+  @@map("org_unit_pvs")
+}
+
+model OrgUnitAssignment {
+  id         String          @id @default(uuid())
+  instanceId String          @map("instance_id")
+  userId     String          @map("user_id")
+  positionIndex Int          @default(0) @map("position_index")
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  instance OrgUnitInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+  @@index([userId])
+  @@unique([instanceId, userId])
+  @@map("org_unit_assignments")
+}
+
+model OrgUnitMember {
+  id         String   @id @default(uuid())
+  instanceId String   @map("instance_id")
+  membreId   String   @map("membre_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  instance OrgUnitInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  membre   Membre          @relation(fields: [membreId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+  @@index([membreId])
+  @@unique([instanceId, membreId])
+  @@map("org_unit_members")
+}
+
 model Membre {
   id                  String    @id @default(uuid())
   sectionId           String    @map("section_id")
@@ -202,6 +323,7 @@ model Membre {
   binomePairsB   BinomePair[] @relation("BinomePairMembreB")
 
   bureauAffectations BureauAffectation[]
+  orgUnitMemberships OrgUnitMember[]
 
   @@map("membres")
 }

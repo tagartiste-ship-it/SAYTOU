@@ -22,6 +22,10 @@ import BinomesPage from './pages/BinomesPage';
 import PrintRencontrePage from './pages/PrintRencontrePage';
 import BureauPage from './pages/BureauPage';
 import InstitutionsPage from './pages/InstitutionsPage';
+import MonInstitutionPage from './pages/MonInstitutionPage';
+import CellulesPage from './pages/CellulesPage';
+import CommissionsPage from './pages/CommissionsPage';
+import PvCellulesPage from './pages/PvCellulesPage';
 
 // Layout
 import Layout from './components/Layout';
@@ -155,6 +159,10 @@ function App() {
           <Route path="binomes" element={<BinomesPage />} />
           <Route path="bureau" element={<BureauPage />} />
           <Route path="institutions" element={<InstitutionsPage />} />
+          <Route path="pv-cellules" element={<PvCellulesPage />} />
+          <Route path="mon-institution" element={<MonInstitutionPage />} />
+          <Route path="cellules" element={<CellulesPage />} />
+          <Route path="commissions" element={<CommissionsPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

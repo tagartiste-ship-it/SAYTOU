@@ -27,7 +27,11 @@ export default function LoginPage() {
       const mustChange = useAuthStore.getState().user?.mustChangePassword;
       navigate(mustChange ? '/change-password' : '/dashboard');
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Erreur de connexion');
+      const networkMessage =
+        error?.code === 'ERR_NETWORK' || !error?.response
+          ? 'Impossible de joindre le serveur (API). Vérifie que le backend est démarré.'
+          : null;
+      toast.error(error.response?.data?.error || networkMessage || 'Erreur de connexion');
     }
   };
 

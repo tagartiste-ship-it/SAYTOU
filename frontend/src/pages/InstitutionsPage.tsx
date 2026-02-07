@@ -47,16 +47,112 @@ interface LocaliteRow {
   } | null;
 }
 
+interface SectionRow {
+  id: string;
+  name: string;
+  sousLocalite?: {
+    id: string;
+    name: string;
+    localite?: {
+      id: string;
+      name: string;
+      comite?: {
+        id: string;
+        name: string;
+        zone?: {
+          id: string;
+          name: string;
+          conclave?: {
+            id: string;
+            name: string;
+          };
+        };
+      } | null;
+    } | null;
+  } | null;
+}
+
+interface OrgUnitInstance {
+  id: string;
+  scopeType: 'LOCALITE' | 'SECTION';
+  scopeId: string;
+  isVisible: boolean;
+  definition: {
+    id: string;
+    kind: 'CELLULE' | 'COMMISSION';
+    code: string;
+    name: string;
+    rubrique: 'CELLULES_S3' | 'COMMISSIONS_S1S2';
+  };
+  assignments: {
+    id: string;
+    positionIndex: number;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      role: string;
+    };
+  }[];
+}
+
+type BureauGroupe = 'S1S2' | 'S3';
+
+interface BureauPosteRow {
+  id: string;
+  name: string;
+  groupe: BureauGroupe;
+  scopeType: 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION';
+  scopeId: string;
+  affectations: {
+    id: string;
+    kind: 'TITULAIRE' | 'ADJOINT';
+    slotType: 'PRIMARY' | 'EXTRA';
+    slotIndex: number;
+    membre?: {
+      id: string;
+      prenom: string;
+      nom: string;
+      ageTranche?: string | null;
+      section?: { id: string; name: string };
+    };
+  }[];
+}
+
 export default function InstitutionsPage() {
   const { user } = useAuthStore();
 
   const canView = user?.role === 'OWNER';
+
+  if (!canView) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <Card>
+          <div className="p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Accès réservé</h2>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+              Cette page est accessible uniquement au rôle OWNER.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   const [conclaves, setConclaves] = useState<Conclave[]>([]);
   const [localites, setLocalites] = useState<LocaliteRow[]>([]);
+
+  const [sections, setSections] = useState<SectionRow[]>([]);
+  const [presentationLocaliteId, setPresentationLocaliteId] = useState<string>('');
+  const [presentationSectionId, setPresentationSectionId] = useState<string>('');
+  const [presentationGroupe, setPresentationGroupe] = useState<BureauGroupe>('S3');
+  const [localiteOrgUnits, setLocaliteOrgUnits] = useState<OrgUnitInstance[]>([]);
+  const [sectionOrgUnits, setSectionOrgUnits] = useState<OrgUnitInstance[]>([]);
+  const [bureauPostes, setBureauPostes] = useState<BureauPosteRow[]>([]);
+  const [isLoadingPresentation, setIsLoadingPresentation] = useState(false);
 
   const [newConclaveName, setNewConclaveName] = useState('');
   const [editingConclaveId, setEditingConclaveId] = useState<string | null>(null);
@@ -92,26 +188,76 @@ export default function InstitutionsPage() {
     if (!canView) {
       setConclaves([]);
       setLocalites([]);
+      setSections([]);
       setIsLoading(false);
       return;
     }
 
     setIsLoading(true);
     try {
-      const [conclavesRes, localitesRes] = await Promise.all([
+      const [conclavesRes, localitesRes, sectionsRes] = await Promise.all([
         api.get<{ conclaves: Conclave[] }>('/institutions/conclaves'),
         api.get<{ localites: LocaliteRow[] }>('/institutions/localites'),
+        api.get<{ sections: SectionRow[] }>('/institutions/sections'),
       ]);
 
       setConclaves(conclavesRes.data.conclaves || []);
       setLocalites(localitesRes.data.localites || []);
+      setSections(sectionsRes.data.sections || []);
     } catch (error: any) {
       console.error('Erreur chargement institutions:', error);
       toast.error(error.response?.data?.error || 'Erreur lors du chargement');
       setConclaves([]);
       setLocalites([]);
+      setSections([]);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchPresentation = async (opts?: { localiteId?: string; sectionId?: string; groupe?: BureauGroupe }) => {
+    if (!canView) return;
+
+    const localiteId = (opts?.localiteId ?? presentationLocaliteId).trim();
+    const sectionId = (opts?.sectionId ?? presentationSectionId).trim();
+    const groupe = opts?.groupe ?? presentationGroupe;
+
+    if (!localiteId && !sectionId) {
+      setLocaliteOrgUnits([]);
+      setSectionOrgUnits([]);
+      setBureauPostes([]);
+      return;
+    }
+
+    setIsLoadingPresentation(true);
+    try {
+      const calls: Promise<any>[] = [];
+      if (localiteId) {
+        calls.push(api.get<{ instances: OrgUnitInstance[] }>(`/institutions/org-units/instances?scopeType=LOCALITE&scopeId=${encodeURIComponent(localiteId)}`));
+        calls.push(api.get<{ postes: BureauPosteRow[] }>(`/bureau/affectations?scopeType=LOCALITE&scopeId=${encodeURIComponent(localiteId)}&groupe=${encodeURIComponent(groupe)}`));
+      } else {
+        calls.push(Promise.resolve({ data: { instances: [] } }));
+        calls.push(Promise.resolve({ data: { postes: [] } }));
+      }
+
+      if (sectionId) {
+        calls.push(api.get<{ instances: OrgUnitInstance[] }>(`/institutions/org-units/instances?scopeType=SECTION&scopeId=${encodeURIComponent(sectionId)}`));
+      } else {
+        calls.push(Promise.resolve({ data: { instances: [] } }));
+      }
+
+      const [localiteUnitsRes, bureauRes, sectionUnitsRes] = await Promise.all(calls);
+      setLocaliteOrgUnits(localiteUnitsRes.data.instances || []);
+      setBureauPostes(bureauRes.data.postes || []);
+      setSectionOrgUnits(sectionUnitsRes.data.instances || []);
+    } catch (error: any) {
+      console.error('Erreur chargement présentation:', error);
+      toast.error(error.response?.data?.error || 'Erreur lors du chargement de la présentation');
+      setLocaliteOrgUnits([]);
+      setSectionOrgUnits([]);
+      setBureauPostes([]);
+    } finally {
+      setIsLoadingPresentation(false);
     }
   };
 
@@ -172,6 +318,20 @@ export default function InstitutionsPage() {
     out.sort((a, b) => a.label.localeCompare(b.label));
     return out;
   }, [conclaves]);
+
+  const presentationSections = useMemo(() => {
+    return [...sections].sort((a, b) => a.name.localeCompare(b.name));
+  }, [sections]);
+
+  const localitesSorted = useMemo(() => {
+    return [...localites].sort((a, b) => a.name.localeCompare(b.name));
+  }, [localites]);
+
+  const groupedOrgUnits = (items: OrgUnitInstance[]) => {
+    const cellules = items.filter((i) => i.definition.kind === 'CELLULE');
+    const commissions = items.filter((i) => i.definition.kind === 'COMMISSION');
+    return { cellules, commissions };
+  };
 
   const createConclave = async () => {
     const name = newConclaveName.trim();
@@ -717,6 +877,186 @@ export default function InstitutionsPage() {
               Si une suppression échoue, c’est souvent parce qu’il y a déjà des éléments rattachés. Détache d’abord, puis supprime.
             </div>
           </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Présentation institutionnelle</h2>
+            <Badge variant="secondary">Lecture seule</Badge>
+          </div>
+
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">Localité (Conseil) / Section — Cellules & Commissions + Bureau existant</div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <select
+              value={presentationLocaliteId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPresentationLocaliteId(v);
+                void fetchPresentation({ localiteId: v });
+              }}
+              className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+            >
+              <option value="">Choisir une localité</option>
+              {localitesSorted.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={presentationSectionId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setPresentationSectionId(v);
+                void fetchPresentation({ sectionId: v });
+              }}
+              className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+            >
+              <option value="">Choisir une section</option>
+              {presentationSections.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <select
+              value={presentationGroupe}
+              onChange={(e) => {
+                const v = e.target.value === 'S1S2' ? 'S1S2' : 'S3';
+                setPresentationGroupe(v);
+                void fetchPresentation({ groupe: v });
+              }}
+              className="flex h-11 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+            >
+              <option value="S3">Bureau groupe S3</option>
+              <option value="S1S2">Bureau groupe S1 + S2</option>
+            </select>
+
+            <Button variant="secondary" onClick={() => void fetchPresentation()} disabled={isLoadingPresentation}>
+              Actualiser
+            </Button>
+          </div>
+
+          {isLoadingPresentation ? (
+            <div className="mt-6 space-y-3">
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : (
+            <div className="mt-6 space-y-6">
+              <div>
+                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Localité (Conseil) — Cellules & Commissions</div>
+                {presentationLocaliteId ? (
+                  <div className="space-y-2">
+                    {(() => {
+                      const { cellules, commissions } = groupedOrgUnits(localiteOrgUnits);
+                      return (
+                        <>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">Cellules (S3): {cellules.length}</div>
+                          <div className="space-y-2">
+                            {cellules.map((it) => (
+                              <div key={it.id} className="flex items-start justify-between gap-3 border border-gray-100 dark:border-gray-800 rounded-lg px-3 py-2">
+                                <div className="text-sm text-gray-900 dark:text-gray-100">{it.definition.name}</div>
+                                <div className="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                  {it.assignments.length > 0 ? it.assignments.map((a) => a.user.name || a.user.email).join(', ') : 'Non assigné'}
+                                </div>
+                              </div>
+                            ))}
+                            {cellules.length === 0 ? <div className="text-sm text-gray-600 dark:text-gray-400">Aucune cellule.</div> : null}
+                          </div>
+
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-4">Commissions (S1+S2): {commissions.length}</div>
+                          <div className="space-y-2">
+                            {commissions.map((it) => (
+                              <div key={it.id} className="flex items-start justify-between gap-3 border border-gray-100 dark:border-gray-800 rounded-lg px-3 py-2">
+                                <div className="text-sm text-gray-900 dark:text-gray-100">{it.definition.name}</div>
+                                <div className="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                  {it.assignments.length > 0 ? it.assignments.map((a) => a.user.name || a.user.email).join(', ') : 'Non assigné'}
+                                </div>
+                              </div>
+                            ))}
+                            {commissions.length === 0 ? <div className="text-sm text-gray-600 dark:text-gray-400">Aucune commission.</div> : null}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Sélectionne une localité pour afficher ses unités.</div>
+                )}
+              </div>
+
+              <div>
+                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Localité (Conseil) — Bureau (existant)</div>
+                {presentationLocaliteId ? (
+                  <div className="space-y-2">
+                    {bureauPostes.map((p) => (
+                      <div key={p.id} className="border border-gray-100 dark:border-gray-800 rounded-lg px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm text-gray-900 dark:text-gray-100 font-medium">{p.name}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">{p.groupe}</div>
+                        </div>
+                        <div className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                          {p.affectations?.length ? p.affectations.map((a) => `${a.kind}: ${a.membre ? `${a.membre.prenom} ${a.membre.nom}` : '—'}`).join(' | ') : '—'}
+                        </div>
+                      </div>
+                    ))}
+                    {bureauPostes.length === 0 ? <div className="text-sm text-gray-600 dark:text-gray-400">Aucun poste configuré.</div> : null}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Sélectionne une localité pour afficher le bureau.</div>
+                )}
+              </div>
+
+              <div>
+                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">Section — Cellules & Commissions</div>
+                {presentationSectionId ? (
+                  <div className="space-y-2">
+                    {(() => {
+                      const { cellules, commissions } = groupedOrgUnits(sectionOrgUnits);
+                      return (
+                        <>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">Cellules (S3): {cellules.length}</div>
+                          <div className="space-y-2">
+                            {cellules.map((it) => (
+                              <div key={it.id} className="flex items-start justify-between gap-3 border border-gray-100 dark:border-gray-800 rounded-lg px-3 py-2">
+                                <div className="text-sm text-gray-900 dark:text-gray-100">{it.definition.name}</div>
+                                <div className="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                  {it.assignments.length > 0 ? it.assignments.map((a) => a.user.name || a.user.email).join(', ') : 'Non assigné'}
+                                </div>
+                              </div>
+                            ))}
+                            {cellules.length === 0 ? <div className="text-sm text-gray-600 dark:text-gray-400">Aucune cellule.</div> : null}
+                          </div>
+
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-4">Commissions (S1+S2): {commissions.length}</div>
+                          <div className="space-y-2">
+                            {commissions.map((it) => (
+                              <div key={it.id} className="flex items-start justify-between gap-3 border border-gray-100 dark:border-gray-800 rounded-lg px-3 py-2">
+                                <div className="text-sm text-gray-900 dark:text-gray-100">{it.definition.name}</div>
+                                <div className="text-xs text-gray-600 dark:text-gray-400 text-right">
+                                  {it.assignments.length > 0 ? it.assignments.map((a) => a.user.name || a.user.email).join(', ') : 'Non assigné'}
+                                </div>
+                              </div>
+                            ))}
+                            {commissions.length === 0 ? <div className="text-sm text-gray-600 dark:text-gray-400">Aucune commission.</div> : null}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-600 dark:text-gray-400">Sélectionne une section pour afficher ses unités.</div>
+                )}
+              </div>
+            </div>
+          )}
         </Card>
       </motion.div>
     </motion.div>

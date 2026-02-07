@@ -13,7 +13,8 @@ import {
   Briefcase,
   LogOut,
   Menu,
-  X
+  X,
+  FileText
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
@@ -167,20 +168,25 @@ export default function Layout() {
     { name: 'Mes Rencontres', href: '/mes-rencontres', icon: CalendarCheck },
     { name: 'Historique', href: '/rencontres', icon: Calendar },
     { name: 'Membres', href: '/membres', icon: Users },
+    { name: 'Cellules', href: '/cellules', icon: Building2, roles: ['LOCALITE', 'SOUS_LOCALITE_ADMIN', 'SECTION_USER'] },
+    { name: 'Commissions', href: '/commissions', icon: Building2, roles: ['LOCALITE', 'SOUS_LOCALITE_ADMIN', 'SECTION_USER'] },
     { name: 'Bureau', href: '/bureau', icon: Briefcase },
     { name: 'Binômes', href: '/binomes', icon: UsersRound },
+    { name: 'Mon Institution', href: '/mon-institution', icon: Building2, roles: ['ORG_UNIT_RESP', 'OWNER'] },
     { name: 'Utilisateurs', href: '/users', icon: UserCog, roles: ['LOCALITE', 'SOUS_LOCALITE_ADMIN'] },
     { name: 'Sous-Localités', href: '/sous-localites', icon: Building2, roles: ['LOCALITE'] },
     { name: 'Sections', href: '/sections', icon: Building2, roles: ['LOCALITE', 'SOUS_LOCALITE_ADMIN'] },
     { name: 'Types', href: '/types', icon: Tags },
     { name: 'Statistiques', href: '/stats', icon: BarChart3 },
     { name: 'Institutions', href: '/institutions', icon: Building2, roles: ['OWNER'] },
+    { name: 'PV des cellules', href: '/pv-cellules', icon: FileText, roles: ['OWNER'] },
   ];
 
   // Filtrer la navigation selon le rôle de l'utilisateur
-  const navigation = baseNavigation.filter(item => 
-    user?.role === 'OWNER' || !item.roles || item.roles.includes(user?.role || '')
-  );
+  const navigation =
+    user?.role === 'ORG_UNIT_RESP'
+      ? baseNavigation.filter((item) => item.href === '/dashboard' || item.roles?.includes('ORG_UNIT_RESP'))
+      : baseNavigation.filter((item) => !item.roles || item.roles.includes(user?.role || ''));
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -252,6 +258,7 @@ export default function Layout() {
                     {user?.role === 'LOCALITE' && 'Super Admin'}
                     {user?.role === 'SOUS_LOCALITE_ADMIN' && 'Admin Sous-Localité'}
                     {user?.role === 'SECTION_USER' && 'Utilisateur Section'}
+                    {user?.role === 'ORG_UNIT_RESP' && 'Resp Cellule/Commission'}
                   </p>
                 </div>
                 <button
@@ -319,6 +326,7 @@ export default function Layout() {
                 {user?.role === 'LOCALITE' && 'Super Admin'}
                 {user?.role === 'SOUS_LOCALITE_ADMIN' && 'Admin Sous-Localité'}
                 {user?.role === 'SECTION_USER' && 'Utilisateur Section'}
+                {user?.role === 'ORG_UNIT_RESP' && 'Resp Cellule/Commission'}
               </p>
             </div>
             <button

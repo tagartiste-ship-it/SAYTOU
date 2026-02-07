@@ -8,7 +8,7 @@ const API_URL = envBase
     })()
   : import.meta.env.DEV
     ? '/api'
-    : 'http://localhost:3000/api';
+    : '/api';
 
 const api = axios.create({
   baseURL: API_URL,

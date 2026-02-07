@@ -36,4 +36,4 @@ RUN mkdir -p /app/uploads
 EXPOSE 3000
 
 # Run migrations and start
-CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
+CMD ["sh", "-c", "npm run start:render"]

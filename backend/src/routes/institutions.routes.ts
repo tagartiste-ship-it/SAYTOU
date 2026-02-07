@@ -6,6 +6,53 @@ const router = Router();
 
 const db = prisma as any;
 
+const PV_FIELD_GROUPS = [
+  {
+    group: 'Contexte',
+    fields: [
+      { key: 'type', label: 'Type de rencontre' },
+      { key: 'section', label: 'Section' },
+      { key: 'date', label: 'Date' },
+      { key: 'heureDebut', label: 'Heure début' },
+      { key: 'heureFin', label: 'Heure fin' },
+      { key: 'lieu', label: 'Lieu' },
+    ],
+  },
+  {
+    group: 'Encadrement',
+    fields: [
+      { key: 'moderateur', label: 'Modérateur' },
+      { key: 'moniteur', label: 'Moniteur' },
+    ],
+  },
+  {
+    group: 'Contenu',
+    fields: [
+      { key: 'theme', label: 'Thème' },
+      { key: 'ordreDuJour', label: 'Ordre du jour' },
+      { key: 'developpement', label: 'Développement' },
+      { key: 'pvReunion', label: 'PV réunion' },
+      { key: 'observations', label: 'Observations' },
+      { key: 'attachments', label: 'Pièces jointes' },
+    ],
+  },
+  {
+    group: 'Présences',
+    fields: [
+      { key: 'presenceHomme', label: 'Présence hommes' },
+      { key: 'presenceFemme', label: 'Présence femmes' },
+      { key: 'presenceTotale', label: 'Présence totale' },
+      { key: 'presents', label: 'Liste des présents' },
+      { key: 'absentsCount', label: "Nombre d'absents" },
+      { key: 'absents', label: 'Liste des absents' },
+      { key: 'effectifSection', label: 'Effectif section' },
+      { key: 'tauxPresence', label: 'Taux de présence' },
+    ],
+  },
+] as const;
+
+const PV_FIELD_KEYS = Array.from(new Set(PV_FIELD_GROUPS.flatMap((g) => g.fields.map((f) => f.key))));
+
 router.use(authenticate);
 router.use(authorize('OWNER'));
 
@@ -29,6 +76,78 @@ router.get('/conclaves', async (_req: AuthRequest, res: Response): Promise<void>
   } catch (error) {
     console.error('Erreur récupération conclaves:', error);
     res.status(500).json({ error: 'Erreur lors de la récupération des conclaves' });
+  }
+});
+
+router.get('/org-units/pv-fields', async (_req: AuthRequest, res: Response): Promise<void> => {
+  res.json({ groups: PV_FIELD_GROUPS, keys: PV_FIELD_KEYS });
+});
+
+router.get('/org-units/pv-configs', async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const definitions = await db.orgUnitDefinition.findMany({
+      where: { isActive: true },
+      include: { pvConfig: { select: { id: true, fields: true, typeIds: true, updatedAt: true } } },
+      orderBy: [{ rubrique: 'asc' }, { kind: 'asc' }, { name: 'asc' }],
+    });
+
+    const rows = (definitions || []).map((d: any) => ({
+      definition: {
+        id: d.id,
+        kind: d.kind,
+        code: d.code,
+        name: d.name,
+        rubrique: d.rubrique,
+      },
+      config: d.pvConfig
+        ? { id: d.pvConfig.id, fields: d.pvConfig.fields, typeIds: d.pvConfig.typeIds, updatedAt: d.pvConfig.updatedAt }
+        : null,
+    }));
+
+    res.json({ rows });
+  } catch (error) {
+    console.error('Erreur récupération pv configs:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des configurations PV' });
+  }
+});
+
+router.put('/org-units/pv-configs/:definitionId', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const definitionId = String(req.params.definitionId ?? '').trim();
+    if (!definitionId) {
+      res.status(400).json({ error: 'definitionId requis' });
+      return;
+    }
+
+    const fieldsRaw = (req.body as any)?.fields;
+    const fields = Array.isArray(fieldsRaw) ? fieldsRaw.map((x) => String(x).trim()).filter(Boolean) : [];
+
+    const typeIdsRaw = (req.body as any)?.typeIds;
+    const typeIds = Array.isArray(typeIdsRaw) ? typeIdsRaw.map((x) => String(x).trim()).filter(Boolean) : [];
+
+    const invalid = fields.filter((k) => !PV_FIELD_KEYS.includes(k as any));
+    if (invalid.length) {
+      res.status(400).json({ error: `Champs PV invalides: ${invalid.join(', ')}` });
+      return;
+    }
+
+    const definition = await db.orgUnitDefinition.findUnique({ where: { id: definitionId }, select: { id: true } });
+    if (!definition) {
+      res.status(404).json({ error: 'Définition non trouvée' });
+      return;
+    }
+
+    const config = await db.orgUnitPvConfig.upsert({
+      where: { definitionId },
+      update: { fields, typeIds: typeIds.length ? typeIds : null },
+      create: { definitionId, fields, typeIds: typeIds.length ? typeIds : null },
+      select: { id: true, definitionId: true, fields: true, typeIds: true, updatedAt: true },
+    });
+
+    res.json({ config });
+  } catch (error) {
+    console.error('Erreur sauvegarde pv config:', error);
+    res.status(500).json({ error: 'Erreur lors de la sauvegarde de la configuration PV' });
   }
 });
 
@@ -444,6 +563,96 @@ router.put('/localites/:id/comite', async (req: AuthRequest, res: Response): Pro
   } catch (error) {
     console.error('Erreur rattachement localite->comite:', error);
     res.status(500).json({ error: 'Erreur lors du rattachement de la localite au comite' });
+  }
+});
+
+router.get('/sections', async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const sections = await db.section.findMany({
+      include: {
+        sousLocalite: {
+          include: {
+            localite: {
+              include: {
+                comite: {
+                  include: {
+                    zone: {
+                      include: {
+                        conclave: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        _count: { select: { membres: true, rencontres: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({ sections });
+  } catch (error) {
+    console.error('Erreur récupération sections institutions:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des sections' });
+  }
+});
+
+router.get('/org-units/definitions', async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const definitions = await db.orgUnitDefinition.findMany({
+      where: { isActive: true },
+      orderBy: [{ rubrique: 'asc' }, { kind: 'asc' }, { name: 'asc' }],
+    });
+
+    res.json({ definitions });
+  } catch (error) {
+    console.error('Erreur récupération org unit definitions:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des définitions' });
+  }
+});
+
+router.get('/org-units/instances', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const scopeType = String(req.query.scopeType ?? '').trim().toUpperCase();
+    const scopeId = String(req.query.scopeId ?? '').trim();
+
+    if (!scopeId) {
+      res.status(400).json({ error: 'scopeId requis' });
+      return;
+    }
+
+    if (scopeType !== 'LOCALITE' && scopeType !== 'SECTION') {
+      res.status(400).json({ error: 'scopeType invalide (LOCALITE ou SECTION)' });
+      return;
+    }
+
+    const instances = await db.orgUnitInstance.findMany({
+      where: { scopeType, scopeId, isVisible: true },
+      include: {
+        definition: true,
+        assignments: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+              },
+            },
+          },
+          orderBy: [{ positionIndex: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
+      orderBy: [{ definition: { rubrique: 'asc' } }, { definition: { kind: 'asc' } }, { definition: { name: 'asc' } }],
+    });
+
+    res.json({ scopeType, scopeId, instances });
+  } catch (error) {
+    console.error('Erreur récupération org unit instances:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération des instances' });
   }
 });
 
