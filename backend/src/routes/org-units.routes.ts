@@ -60,13 +60,22 @@ const ensureLocaliteActor = async (req: AuthRequest, res: Response): Promise<str
     ((actor as any)?.section?.sousLocalite?.localiteId as string | null | undefined) ??
     null;
 
-  if (!derivedLocaliteId) {
-    res.status(403).json({ error: 'Compte LOCALITE non rattaché à une localité' });
-    return null;
+  if (derivedLocaliteId) {
+    req.user.localiteId = derivedLocaliteId;
+    return derivedLocaliteId;
   }
 
-  req.user.localiteId = derivedLocaliteId;
-  return derivedLocaliteId;
+  // Auto-rattachement (ultra-guardé): si une seule localité existe, rattacher ce compte LOCALITE à cette localité.
+  const localites = await prisma.localite.findMany({ select: { id: true }, take: 2 });
+  if (localites.length === 1) {
+    const onlyLocaliteId = localites[0]!.id;
+    await prisma.user.update({ where: { id: req.user.userId }, data: { localiteId: onlyLocaliteId as any } });
+    req.user.localiteId = onlyLocaliteId;
+    return onlyLocaliteId;
+  }
+
+  res.status(403).json({ error: 'Compte LOCALITE non rattaché à une localité' });
+  return null;
 };
 
 router.use(authenticate);
