@@ -289,6 +289,20 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+router.get('/me', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: 'Non authentifié' });
+      return;
+    }
+
+    res.json({ user: req.user });
+  } catch (error) {
+    console.error('Erreur auth/me:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 /**
  * @swagger
  * /api/auth/refresh:
