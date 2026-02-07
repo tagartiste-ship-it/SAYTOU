@@ -35,13 +35,38 @@ const getLocaliteScopeSectionIds = async (localiteId: string): Promise<string[]>
 };
 
 const ensureLocaliteActor = async (req: AuthRequest, res: Response): Promise<string | null> => {
-  const localiteId = req.user?.localiteId ?? null;
-  if (!localiteId) {
+  const jwtLocaliteId = req.user?.localiteId ?? null;
+  if (jwtLocaliteId) return jwtLocaliteId;
+
+  // Tolérance: si le token est ancien/incomplet, on déduit la localité depuis la base.
+  // Ne s'applique qu'aux comptes LOCALITE.
+  if (!req.user || req.user.role !== 'LOCALITE') {
     res.status(403).json({ error: 'Compte LOCALITE non rattaché à une localité' });
     return null;
   }
 
-  return localiteId;
+  const actor = await (prisma.user as any).findUnique({
+    where: { id: req.user.userId },
+    select: {
+      localiteId: true,
+      sousLocalite: { select: { localiteId: true } },
+      section: { select: { sousLocalite: { select: { localiteId: true } } } },
+    },
+  });
+
+  const derivedLocaliteId =
+    ((actor as any)?.localiteId as string | null | undefined) ??
+    ((actor as any)?.sousLocalite?.localiteId as string | null | undefined) ??
+    ((actor as any)?.section?.sousLocalite?.localiteId as string | null | undefined) ??
+    null;
+
+  if (!derivedLocaliteId) {
+    res.status(403).json({ error: 'Compte LOCALITE non rattaché à une localité' });
+    return null;
+  }
+
+  req.user.localiteId = derivedLocaliteId;
+  return derivedLocaliteId;
 };
 
 router.use(authenticate);
