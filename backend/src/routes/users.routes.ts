@@ -150,10 +150,17 @@ router.get(
       if (userRole === 'LOCALITE') {
         const actor = await (prisma.user as any).findUnique({
           where: { id: userId },
-          select: { localiteId: true },
+          select: {
+            localiteId: true,
+            sousLocalite: { select: { localiteId: true } },
+            section: { select: { sousLocalite: { select: { localiteId: true } } } },
+          },
         });
 
-        const actorLocaliteId = (actor as any)?.localiteId as string | null | undefined;
+        const actorLocaliteId =
+          ((actor as any)?.localiteId as string | null | undefined) ??
+          ((actor as any)?.sousLocalite?.localiteId as string | null | undefined) ??
+          ((actor as any)?.section?.sousLocalite?.localiteId as string | null | undefined);
         if (!actorLocaliteId) {
           res.json({ users: [] });
           return;
