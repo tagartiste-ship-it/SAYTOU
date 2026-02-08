@@ -634,7 +634,7 @@ export default function MonInstitutionPage() {
                                     return (
                                       <div className="mt-3 grid gap-2 sm:grid-cols-3">
                                         {defCode === 'CORPORATIVE' ? (
-                                          <div className="sm:col-span-2 rounded-md border border-gray-200 dark:border-gray-800">
+                                          <div className="sm:col-span-3 rounded-md border border-gray-200 dark:border-gray-800">
                                             <div className="border-b border-gray-200 dark:border-gray-800 px-3 py-2">
                                               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Filtre: Corps de métier</p>
                                               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
@@ -677,7 +677,7 @@ export default function MonInstitutionPage() {
                                                   const rows: Array<{ label: string; count: number }> = [{ label: '', count: corpsMetierTotalMembres }, ...options];
 
                                                   return (
-                                                    <div className="grid gap-2 sm:grid-cols-2">
+                                                    <div className="grid gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                                                       {rows.map((x) => {
                                                         const isAll = !x.label;
                                                         const label = isAll ? 'Tous' : x.label;
@@ -815,7 +815,7 @@ export default function MonInstitutionPage() {
                                           </div>
                                         )}
 
-                                        <div className="flex items-end justify-end">
+                                        <div className="sm:col-span-3 flex items-end justify-end">
                                           <Button
                                             onClick={() => void fetchPvAuto(a.instance.id)}
                                             disabled={!!pvAutoLoadingByInstanceId[a.instance.id]}
