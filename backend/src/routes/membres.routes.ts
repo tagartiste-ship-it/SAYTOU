@@ -42,6 +42,39 @@ const parseOptionalDate = (value: unknown) => {
   if (Number.isNaN(d.getTime())) return undefined;
   return d;
 };
+
+const normalizeLoose = (value: unknown): string => {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const levenshtein = (a: string, b: string): number => {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+
+  const dp = new Array(b.length + 1);
+  for (let j = 0; j <= b.length; j++) dp[j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = dp[j];
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + cost);
+      prev = tmp;
+    }
+  }
+
+  return dp[b.length];
+};
 router.get('/corps-metiers', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user;
@@ -145,9 +178,53 @@ router.get('/corps-metiers', authenticate, async (req: AuthRequest, res: Respons
       },
     });
 
-    const corpsMetiers = (rows as any[])
+    const rawValues = (rows as any[])
       .map((r) => String(r.corpsMetier ?? '').trim())
       .filter((v) => v);
+
+    // Fusion: mêmes valeurs (casse/accents/espaces) + fautes mineures (distance Levenshtein)
+    const countsByRaw = new Map<string, number>();
+    for (const v of rawValues) countsByRaw.set(v, (countsByRaw.get(v) ?? 0) + 1);
+
+    const uniqueRaw = Array.from(countsByRaw.keys());
+
+    type Cluster = { key: string; items: Array<{ raw: string; norm: string; count: number }> };
+    const clusters: Cluster[] = [];
+
+    const maxDistFor = (s: string) => {
+      if (s.length <= 4) return 0;
+      if (s.length <= 7) return 1;
+      if (s.length <= 12) return 2;
+      return 3;
+    };
+
+    for (const raw of uniqueRaw) {
+      const norm = normalizeLoose(raw);
+      if (!norm) continue;
+
+      let found: Cluster | null = null;
+      for (const c of clusters) {
+        const d = levenshtein(norm, c.key);
+        const maxDist = Math.min(maxDistFor(norm), maxDistFor(c.key));
+        if (d <= maxDist) {
+          found = c;
+          break;
+        }
+      }
+
+      const item = { raw, norm, count: countsByRaw.get(raw) ?? 1 };
+      if (found) found.items.push(item);
+      else clusters.push({ key: norm, items: [item] });
+    }
+
+    const corpsMetiers = clusters
+      .map((c) => {
+        // Canonique: la variante la plus fréquente, à défaut la plus courte
+        const sorted = [...c.items].sort((a, b) => (b.count - a.count) || (a.raw.length - b.raw.length) || a.raw.localeCompare(b.raw));
+        return sorted[0]!.raw;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
 
     res.json({ corpsMetiers });
   } catch (error: any) {

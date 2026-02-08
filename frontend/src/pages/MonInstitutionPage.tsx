@@ -804,6 +804,7 @@ export default function MonInstitutionPage() {
                                         const sections = Array.isArray(pvAuto?.sections) ? pvAuto.sections : [];
 
                                         if (meta?.mode === 'MEMBRE_FILTER') {
+                                          const defCode = String(a.instance.definition.code ?? '').trim().toUpperCase();
                                           return (
                                             <div className="space-y-6">
                                               {sections.length === 0 ? (
@@ -824,11 +825,20 @@ export default function MonInstitutionPage() {
                                                             <tr>
                                                               <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Prénom</th>
                                                               <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Nom</th>
-                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Genre</th>
-                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Fonction</th>
-                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Corps de métier</th>
-                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Groupe sanguin</th>
-                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Carte électeur</th>
+                                                              {defCode === 'CORPORATIVE' ? (
+                                                                <>
+                                                                  <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Adresse</th>
+                                                                  <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Contact</th>
+                                                                </>
+                                                              ) : (
+                                                                <>
+                                                                  <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Genre</th>
+                                                                  <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Fonction</th>
+                                                                  <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Corps de métier</th>
+                                                                  <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Groupe sanguin</th>
+                                                                  <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Carte électeur</th>
+                                                                </>
+                                                              )}
                                                             </tr>
                                                           </thead>
                                                           <tbody>
@@ -836,11 +846,20 @@ export default function MonInstitutionPage() {
                                                               <tr key={String(m.id)} className="odd:bg-white even:bg-gray-50 dark:odd:bg-gray-950 dark:even:bg-gray-900/40">
                                                                 <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.prenom)}</td>
                                                                 <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.nom)}</td>
-                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.genre)}</td>
-                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.fonction)}</td>
-                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.corpsMetier)}</td>
-                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.groupeSanguin)}</td>
-                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.numeroCarteElecteur)}</td>
+                                                                {defCode === 'CORPORATIVE' ? (
+                                                                  <>
+                                                                    <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.adresse)}</td>
+                                                                    <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.telephone)}</td>
+                                                                  </>
+                                                                ) : (
+                                                                  <>
+                                                                    <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.genre)}</td>
+                                                                    <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.fonction)}</td>
+                                                                    <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.corpsMetier)}</td>
+                                                                    <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.groupeSanguin)}</td>
+                                                                    <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.numeroCarteElecteur)}</td>
+                                                                  </>
+                                                                )}
                                                               </tr>
                                                             ))}
                                                           </tbody>

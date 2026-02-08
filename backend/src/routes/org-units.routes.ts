@@ -516,6 +516,8 @@ router.get('/instances/:instanceId/pv/auto', async (req: AuthRequest, res: Respo
           fonction: true,
           corpsMetier: true,
           groupeSanguin: true,
+          adresse: true,
+          telephone: true,
           numeroCarteElecteur: true,
           sectionId: true,
           section: { select: { id: true, name: true } },
@@ -537,6 +539,8 @@ router.get('/instances/:instanceId/pv/auto', async (req: AuthRequest, res: Respo
           fonction: m.fonction ?? '',
           corpsMetier: m.corpsMetier ?? '',
           groupeSanguin: m.groupeSanguin ?? '',
+          adresse: m.adresse ?? '',
+          telephone: m.telephone ?? '',
           numeroCarteElecteur: m.numeroCarteElecteur ?? '',
         });
         bySectionId.set(sid, s);
