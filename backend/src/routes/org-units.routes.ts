@@ -420,6 +420,9 @@ router.get('/instances/:instanceId/pv/auto', async (req: AuthRequest, res: Respo
     const instanceId = String(req.params.instanceId ?? '').trim();
     const fromRaw = String(req.query.from ?? '').trim();
     const toRaw = String(req.query.to ?? '').trim();
+    const corpsMetier = String(req.query.corpsMetier ?? '').trim();
+    const groupeSanguin = String(req.query.groupeSanguin ?? '').trim();
+    const statutElecteur = String(req.query.statutElecteur ?? '').trim().toUpperCase();
     if (!instanceId) {
       res.status(400).json({ error: 'instanceId requis' });
       return;
@@ -473,6 +476,93 @@ router.get('/instances/:instanceId/pv/auto', async (req: AuthRequest, res: Respo
 
     if (!sectionIds.length) {
       res.json({ pvAuto: { meta: { instanceId: instance.id }, sections: [] } });
+      return;
+    }
+
+    const defCode = String((instance as any)?.definition?.code ?? '').trim().toUpperCase();
+    const isMemberFilterOnlyCellule = defCode === 'CORPORATIVE' || defCode === 'SANTE' || defCode === 'CSU';
+
+    if (isMemberFilterOnlyCellule) {
+      const whereAndMembers: any[] = [{ sectionId: { in: sectionIds } }];
+
+      if (defCode === 'CORPORATIVE') {
+        if (corpsMetier) whereAndMembers.push({ corpsMetier: { contains: corpsMetier, mode: 'insensitive' } });
+      } else if (defCode === 'SANTE') {
+        if (groupeSanguin) whereAndMembers.push({ groupeSanguin });
+      } else if (defCode === 'CSU') {
+        if (statutElecteur) {
+          const now = new Date();
+          const date18 = new Date(now);
+          date18.setFullYear(now.getFullYear() - 18);
+
+          if (statutElecteur === 'VOTANT') {
+            whereAndMembers.push({ dateNaissance: { lte: date18 } });
+            whereAndMembers.push({ numeroCarteElecteur: { not: null } });
+            whereAndMembers.push({ numeroCarteElecteur: { not: '' } });
+          } else if (statutElecteur === 'NON_VOTANT') {
+            whereAndMembers.push({ dateNaissance: { lte: date18 } });
+            whereAndMembers.push({ OR: [{ numeroCarteElecteur: null }, { numeroCarteElecteur: '' }] });
+          }
+        }
+      }
+
+      const members = await prisma.membre.findMany({
+        where: whereAndMembers.length ? { AND: whereAndMembers } : {},
+        select: {
+          id: true,
+          prenom: true,
+          nom: true,
+          genre: true,
+          fonction: true,
+          corpsMetier: true,
+          groupeSanguin: true,
+          numeroCarteElecteur: true,
+          sectionId: true,
+          section: { select: { id: true, name: true } },
+        },
+        orderBy: [{ sectionId: 'asc' }, { nom: 'asc' }, { prenom: 'asc' }],
+      });
+
+      const bySectionId = new Map<string, { sectionId: string; sectionName: string; membres: any[] }>();
+      for (const m of members as any[]) {
+        const sid = m.section?.id ?? m.sectionId ?? '';
+        if (!sid) continue;
+        const sectionName = m.section?.name ?? '';
+        const s = bySectionId.get(sid) ?? { sectionId: sid, sectionName, membres: [] as any[] };
+        s.membres.push({
+          id: m.id,
+          prenom: m.prenom,
+          nom: m.nom,
+          genre: m.genre ?? '',
+          fonction: m.fonction ?? '',
+          corpsMetier: m.corpsMetier ?? '',
+          groupeSanguin: m.groupeSanguin ?? '',
+          numeroCarteElecteur: m.numeroCarteElecteur ?? '',
+        });
+        bySectionId.set(sid, s);
+      }
+
+      const sections = Array.from(bySectionId.values());
+
+      res.json({
+        pvAuto: {
+          meta: {
+            mode: 'MEMBRE_FILTER',
+            instanceId: instance.id,
+            definitionId: instance.definitionId,
+            definition: instance.definition,
+            selectedFields: [],
+            typeIds: [],
+            filter: {
+              corpsMetier: defCode === 'CORPORATIVE' ? (corpsMetier || null) : null,
+              groupeSanguin: defCode === 'SANTE' ? (groupeSanguin || null) : null,
+              statutElecteur: defCode === 'CSU' ? (statutElecteur || null) : null,
+            },
+            totalMembres: members.length,
+          },
+          sections,
+        },
+      });
       return;
     }
 

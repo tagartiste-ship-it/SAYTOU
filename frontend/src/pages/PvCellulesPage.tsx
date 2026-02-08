@@ -134,6 +134,17 @@ export default function PvCellulesPage() {
     });
   };
 
+  const toggleAllTypeIds = (definitionId: string) => {
+    setTypeIdsByDefinitionId((prev) => {
+      const allIds = (types || []).map((t) => t.id);
+      const current = new Set(prev[definitionId] || []);
+      const hasAll = allIds.length > 0 && allIds.every((id) => current.has(id));
+      const nextArr = hasAll ? [] : allIds;
+      setDirtyByDefinitionId((d) => ({ ...d, [definitionId]: true }));
+      return { ...prev, [definitionId]: nextArr };
+    });
+  };
+
   const saveDefinition = async (definitionId: string) => {
     try {
       const fields = fieldsByDefinitionId[definitionId] || [];
@@ -202,6 +213,11 @@ export default function PvCellulesPage() {
             const selected = new Set(fieldsByDefinitionId[r.definition.id] || []);
             const dirty = !!dirtyByDefinitionId[r.definition.id];
             const selectedTypes = new Set(typeIdsByDefinitionId[r.definition.id] || []);
+            const isMemberFilterOnlyCellule =
+              r.definition.kind === 'CELLULE' &&
+              (r.definition.code === 'CORPORATIVE' || r.definition.code === 'SANTE' || r.definition.code === 'CSU');
+            const allTypeIds = (types || []).map((t) => t.id);
+            const hasAllTypes = allTypeIds.length > 0 && allTypeIds.every((id) => selectedTypes.has(id));
 
             return (
               <Card key={r.definition.id} className="p-0">
@@ -223,28 +239,33 @@ export default function PvCellulesPage() {
                 </div>
 
                 <div className="p-4 space-y-4">
-                  <div className="rounded-md border border-gray-200 dark:border-gray-800">
-                    <div className="border-b border-gray-200 dark:border-gray-800 px-3 py-2">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Types de rencontres (mapping PV auto)</p>
+                  {!isMemberFilterOnlyCellule && (
+                    <div className="rounded-md border border-gray-200 dark:border-gray-800">
+                      <div className="border-b border-gray-200 dark:border-gray-800 px-3 py-2 flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Types de rencontres (mapping PV auto)</p>
+                        <Button variant="outline" size="sm" onClick={() => toggleAllTypeIds(r.definition.id)} disabled={types.length === 0}>
+                          {hasAllTypes ? 'Tout décocher' : 'Tout cocher'}
+                        </Button>
+                      </div>
+                      <div className="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {types.length === 0 ? (
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Aucun type.</p>
+                        ) : (
+                          types.map((t) => (
+                            <label key={t.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                              <input
+                                type="checkbox"
+                                checked={selectedTypes.has(t.id)}
+                                onChange={() => toggleTypeId(r.definition.id, t.id)}
+                                className="h-4 w-4"
+                              />
+                              <span className="truncate">{t.name}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
                     </div>
-                    <div className="grid gap-2 p-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {types.length === 0 ? (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">Aucun type.</p>
-                      ) : (
-                        types.map((t) => (
-                          <label key={t.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                            <input
-                              type="checkbox"
-                              checked={selectedTypes.has(t.id)}
-                              onChange={() => toggleTypeId(r.definition.id, t.id)}
-                              className="h-4 w-4"
-                            />
-                            <span className="truncate">{t.name}</span>
-                          </label>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                  )}
 
                   {fieldGroups.map((g) => (
                     <div key={g.group} className="rounded-md border border-gray-200 dark:border-gray-800">

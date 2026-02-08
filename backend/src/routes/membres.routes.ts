@@ -147,6 +147,111 @@ router.get('/corps-metiers', authenticate, async (req: AuthRequest, res: Respons
   }
 });
 
+router.get('/groupes-sanguins', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: 'Non authentifié' });
+      return;
+    }
+
+    const sectionIdParam = String(req.query.sectionId ?? '').trim();
+
+    const where: any = {
+      groupeSanguin: {
+        not: null,
+      },
+    };
+
+    if (user.role === 'SECTION_USER') {
+      if (!user.sectionId) {
+        res.status(403).json({ error: 'Section non définie pour cet utilisateur' });
+        return;
+      }
+      where.sectionId = user.sectionId;
+    } else if (user.role === 'SOUS_LOCALITE_ADMIN') {
+      if (!user.sousLocaliteId) {
+        res.status(403).json({ error: 'Sous-localité non définie pour cet utilisateur' });
+        return;
+      }
+
+      if (sectionIdParam) {
+        const section = await prisma.section.findUnique({
+          where: { id: sectionIdParam },
+          select: { sousLocaliteId: true },
+        });
+        if (!section || section.sousLocaliteId !== user.sousLocaliteId) {
+          res.status(403).json({ error: 'Accès non autorisé' });
+          return;
+        }
+        where.sectionId = sectionIdParam;
+      } else {
+        where.section = { sousLocaliteId: user.sousLocaliteId };
+      }
+    } else if (user.role === 'LOCALITE') {
+      const creatorUser = await prisma.user.findUnique({
+        where: { id: user.userId },
+        select: { sousLocalite: { select: { localiteId: true } } },
+      });
+
+      let localiteId = (creatorUser as any)?.sousLocalite?.localiteId ?? null;
+      if (!localiteId) {
+        const anySousLocalite = await prisma.sousLocalite.findFirst({
+          where: { createdById: user.userId },
+          select: { localiteId: true },
+          orderBy: { createdAt: 'asc' },
+        });
+        localiteId = (anySousLocalite as any)?.localiteId ?? null;
+      }
+
+      if (!localiteId) {
+        res.status(403).json({ error: 'Localité non définie pour cet utilisateur' });
+        return;
+      }
+
+      if (sectionIdParam) {
+        const section = await prisma.section.findUnique({
+          where: { id: sectionIdParam },
+          select: { sousLocalite: { select: { localiteId: true } } },
+        });
+        if (!section || (section as any).sousLocalite.localiteId !== localiteId) {
+          res.status(403).json({ error: 'Accès non autorisé' });
+          return;
+        }
+        where.sectionId = sectionIdParam;
+      } else {
+        where.section = { sousLocalite: { localiteId } };
+      }
+    } else {
+      if (!sectionIdParam) {
+        res.status(400).json({ error: 'sectionId requis' });
+        return;
+      }
+      where.sectionId = sectionIdParam;
+    }
+
+    const rows = await prisma.membre.findMany({
+      where,
+      distinct: ['groupeSanguin'],
+      select: {
+        groupeSanguin: true,
+      },
+      orderBy: {
+        groupeSanguin: 'asc',
+      },
+    });
+
+    const groupesSanguins = (rows as any[])
+      .map((r) => String(r.groupeSanguin ?? '').trim())
+      .filter((v) => v);
+
+    res.json({ groupesSanguins });
+  } catch (error: any) {
+    console.error('Erreur récupération groupes sanguins:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 router.get('/participations', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user;

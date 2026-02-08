@@ -69,6 +69,13 @@ export default function MonInstitutionPage() {
   const [pvAutoLoadingByInstanceId, setPvAutoLoadingByInstanceId] = useState<Record<string, boolean>>({});
   const [pvAutoPeriodByInstanceId, setPvAutoPeriodByInstanceId] = useState<Record<string, { from: string; to: string }>>({});
 
+  const [pvAutoCorpsMetierByInstanceId, setPvAutoCorpsMetierByInstanceId] = useState<Record<string, string>>({});
+  const [pvAutoGroupeSanguinByInstanceId, setPvAutoGroupeSanguinByInstanceId] = useState<Record<string, string>>({});
+  const [pvAutoStatutElecteurByInstanceId, setPvAutoStatutElecteurByInstanceId] = useState<Record<string, string>>({});
+
+  const [corpsMetiers, setCorpsMetiers] = useState<string[]>([]);
+  const [groupesSanguins, setGroupesSanguins] = useState<string[]>([]);
+
   const [membersByInstanceId, setMembersByInstanceId] = useState<Record<string, OrgUnitMemberDto[]>>({});
   const [membersLoadingByInstanceId, setMembersLoadingByInstanceId] = useState<Record<string, boolean>>({});
 
@@ -150,6 +157,24 @@ export default function MonInstitutionPage() {
     return () => window.clearTimeout(t);
   }, [memberSearch]);
 
+  useEffect(() => {
+    const loadFilters = async () => {
+      try {
+        const [cmRes, gsRes] = await Promise.all([
+          api.get<{ corpsMetiers: string[] }>('/membres/corps-metiers'),
+          api.get<{ groupesSanguins: string[] }>('/membres/groupes-sanguins'),
+        ]);
+        setCorpsMetiers(Array.isArray(cmRes.data?.corpsMetiers) ? cmRes.data.corpsMetiers : []);
+        setGroupesSanguins(Array.isArray(gsRes.data?.groupesSanguins) ? gsRes.data.groupesSanguins : []);
+      } catch {
+        setCorpsMetiers([]);
+        setGroupesSanguins([]);
+      }
+    };
+
+    void loadFilters();
+  }, []);
+
   const fetchPv = async (instanceId: string) => {
     try {
       const res = await api.get<{ pv: OrgUnitPvDto | null }>(`/org-units/instances/${instanceId}/pv`);
@@ -217,6 +242,43 @@ export default function MonInstitutionPage() {
 
   const buildPvAutoMarkdown = (pvAuto: any): string => {
     const meta = pvAuto?.meta ?? {};
+    if (meta?.mode === 'MEMBRE_FILTER') {
+      const defName = meta?.definition?.name ?? '';
+      const filter = meta?.filter ?? {};
+      const totalMembres = Number(meta?.totalMembres ?? 0) || 0;
+      const lines: string[] = [];
+      lines.push(`PV AUTO — ${defName}`.trim());
+      if (filter?.corpsMetier) lines.push(`Filtre corps de métier: ${String(filter.corpsMetier)}`);
+      if (filter?.groupeSanguin) lines.push(`Filtre groupe sanguin: ${String(filter.groupeSanguin)}`);
+      if (filter?.statutElecteur) lines.push(`Filtre statut électeur: ${String(filter.statutElecteur)}`);
+      lines.push(`Total membres: ${totalMembres}`);
+      lines.push('');
+
+      const sections = Array.isArray(pvAuto?.sections) ? pvAuto.sections : [];
+      for (const s of sections) {
+        lines.push(`## Section: ${s.sectionName || s.sectionId || ''}`.trim());
+        const membres = Array.isArray(s.membres) ? s.membres : [];
+        lines.push('');
+        lines.push(`| Prénom | Nom | Genre | Fonction | Corps de métier | Groupe sanguin | Carte électeur |`);
+        lines.push(`| --- | --- | --- | --- | --- | --- | --- |`);
+        for (const m of membres) {
+          const row = [
+            String(m?.prenom ?? '').replace(/\|/g, '\\|'),
+            String(m?.nom ?? '').replace(/\|/g, '\\|'),
+            String(m?.genre ?? '').replace(/\|/g, '\\|'),
+            String(m?.fonction ?? '').replace(/\|/g, '\\|'),
+            String(m?.corpsMetier ?? '').replace(/\|/g, '\\|'),
+            String(m?.groupeSanguin ?? '').replace(/\|/g, '\\|'),
+            String(m?.numeroCarteElecteur ?? '').replace(/\|/g, '\\|'),
+          ];
+          lines.push(`| ${row.join(' | ')} |`);
+        }
+        lines.push('');
+      }
+
+      return lines.join('\n').trim() + '\n';
+    }
+
     const defName = meta?.definition?.name ?? '';
     const from = meta?.from ?? '';
     const to = meta?.to ?? '';
@@ -256,8 +318,26 @@ export default function MonInstitutionPage() {
     try {
       const period = pvAutoPeriodByInstanceId[instanceId];
       const params: any = {};
-      if (period?.from) params.from = period.from;
-      if (period?.to) params.to = period.to;
+
+      const assignment = assignments.find((a) => a.instance.id === instanceId);
+      const defCode = String(assignment?.instance?.definition?.code ?? '').trim().toUpperCase();
+      const isMemberFilterOnlyCellule = defCode === 'CORPORATIVE' || defCode === 'SANTE' || defCode === 'CSU';
+
+      if (!isMemberFilterOnlyCellule) {
+        if (period?.from) params.from = period.from;
+        if (period?.to) params.to = period.to;
+      } else {
+        if (defCode === 'CORPORATIVE') {
+          const v = pvAutoCorpsMetierByInstanceId[instanceId];
+          if (v) params.corpsMetier = v;
+        } else if (defCode === 'SANTE') {
+          const v = pvAutoGroupeSanguinByInstanceId[instanceId];
+          if (v) params.groupeSanguin = v;
+        } else if (defCode === 'CSU') {
+          const v = pvAutoStatutElecteurByInstanceId[instanceId];
+          if (v) params.statutElecteur = v;
+        }
+      }
 
       const res = await api.get<any>(`/org-units/instances/${instanceId}/pv/auto`, { params });
       setPvAutoByInstanceId((prev) => ({ ...prev, [instanceId]: res.data?.pvAuto ?? null }));
@@ -487,61 +567,182 @@ export default function MonInstitutionPage() {
 
                               {(pvModeByInstanceId[a.instance.id] ?? 'manual') === 'auto' ? (
                                 <>
-                                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                                    <div>
-                                      <label className="text-xs text-gray-600 dark:text-gray-400">Du</label>
-                                      <input
-                                        type="date"
-                                        className="mt-1 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
-                                        value={pvAutoPeriodByInstanceId[a.instance.id]?.from ?? ''}
-                                        onChange={(e) =>
-                                          setPvAutoPeriodByInstanceId((prev) => ({
-                                            ...prev,
-                                            [a.instance.id]: {
-                                              from: e.target.value,
-                                              to: prev[a.instance.id]?.to ?? '',
-                                            },
-                                          }))
-                                        }
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="text-xs text-gray-600 dark:text-gray-400">Au</label>
-                                      <input
-                                        type="date"
-                                        className="mt-1 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
-                                        value={pvAutoPeriodByInstanceId[a.instance.id]?.to ?? ''}
-                                        onChange={(e) =>
-                                          setPvAutoPeriodByInstanceId((prev) => ({
-                                            ...prev,
-                                            [a.instance.id]: {
-                                              from: prev[a.instance.id]?.from ?? '',
-                                              to: e.target.value,
-                                            },
-                                          }))
-                                        }
-                                      />
-                                    </div>
-                                    <div className="flex items-end justify-end">
-                                      <Button
-                                        onClick={() => void fetchPvAuto(a.instance.id)}
-                                        disabled={!!pvAutoLoadingByInstanceId[a.instance.id]}
-                                      >
-                                        {pvAutoLoadingByInstanceId[a.instance.id] ? 'Génération…' : 'Générer'}
-                                      </Button>
-                                    </div>
-                                  </div>
+                                  {(() => {
+                                    const defCode = String(a.instance.definition.code ?? '').trim().toUpperCase();
+                                    const isMemberFilterOnlyCellule = defCode === 'CORPORATIVE' || defCode === 'SANTE' || defCode === 'CSU';
+
+                                    if (!isMemberFilterOnlyCellule) {
+                                      return (
+                                        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                                          <div>
+                                            <label className="text-xs text-gray-600 dark:text-gray-400">Du</label>
+                                            <input
+                                              type="date"
+                                              className="mt-1 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
+                                              value={pvAutoPeriodByInstanceId[a.instance.id]?.from ?? ''}
+                                              onChange={(e) =>
+                                                setPvAutoPeriodByInstanceId((prev) => ({
+                                                  ...prev,
+                                                  [a.instance.id]: {
+                                                    from: e.target.value,
+                                                    to: prev[a.instance.id]?.to ?? '',
+                                                  },
+                                                }))
+                                              }
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-xs text-gray-600 dark:text-gray-400">Au</label>
+                                            <input
+                                              type="date"
+                                              className="mt-1 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
+                                              value={pvAutoPeriodByInstanceId[a.instance.id]?.to ?? ''}
+                                              onChange={(e) =>
+                                                setPvAutoPeriodByInstanceId((prev) => ({
+                                                  ...prev,
+                                                  [a.instance.id]: {
+                                                    from: prev[a.instance.id]?.from ?? '',
+                                                    to: e.target.value,
+                                                  },
+                                                }))
+                                              }
+                                            />
+                                          </div>
+                                          <div className="flex items-end justify-end">
+                                            <Button
+                                              onClick={() => void fetchPvAuto(a.instance.id)}
+                                              disabled={!!pvAutoLoadingByInstanceId[a.instance.id]}
+                                            >
+                                              {pvAutoLoadingByInstanceId[a.instance.id] ? 'Génération…' : 'Générer'}
+                                            </Button>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+
+                                    return (
+                                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                                        {defCode === 'CORPORATIVE' ? (
+                                          <div className="sm:col-span-2">
+                                            <label className="text-xs text-gray-600 dark:text-gray-400">Corps de métier</label>
+                                            <select
+                                              className="mt-1 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
+                                              value={pvAutoCorpsMetierByInstanceId[a.instance.id] ?? ''}
+                                              onChange={(e) => setPvAutoCorpsMetierByInstanceId((prev) => ({ ...prev, [a.instance.id]: e.target.value }))}
+                                            >
+                                              <option value="">Tous</option>
+                                              {corpsMetiers.map((v) => (
+                                                <option key={v} value={v}>
+                                                  {v}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                        ) : defCode === 'SANTE' ? (
+                                          <div className="sm:col-span-2">
+                                            <label className="text-xs text-gray-600 dark:text-gray-400">Groupe sanguin</label>
+                                            <select
+                                              className="mt-1 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
+                                              value={pvAutoGroupeSanguinByInstanceId[a.instance.id] ?? ''}
+                                              onChange={(e) => setPvAutoGroupeSanguinByInstanceId((prev) => ({ ...prev, [a.instance.id]: e.target.value }))}
+                                            >
+                                              <option value="">Tous</option>
+                                              {groupesSanguins.map((v) => (
+                                                <option key={v} value={v}>
+                                                  {v}
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                        ) : (
+                                          <div className="sm:col-span-2">
+                                            <label className="text-xs text-gray-600 dark:text-gray-400">Statut électeur</label>
+                                            <select
+                                              className="mt-1 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
+                                              value={pvAutoStatutElecteurByInstanceId[a.instance.id] ?? ''}
+                                              onChange={(e) => setPvAutoStatutElecteurByInstanceId((prev) => ({ ...prev, [a.instance.id]: e.target.value }))}
+                                            >
+                                              <option value="">Tous</option>
+                                              <option value="VOTANT">Votant</option>
+                                              <option value="NON_VOTANT">Non votant</option>
+                                            </select>
+                                          </div>
+                                        )}
+
+                                        <div className="flex items-end justify-end">
+                                          <Button
+                                            onClick={() => void fetchPvAuto(a.instance.id)}
+                                            disabled={!!pvAutoLoadingByInstanceId[a.instance.id]}
+                                          >
+                                            {pvAutoLoadingByInstanceId[a.instance.id] ? 'Génération…' : 'Générer'}
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
 
                                   <div className="mt-3 space-y-4">
                                     {pvAutoByInstanceId[a.instance.id] ? (
                                       (() => {
                                         const pvAuto = pvAutoByInstanceId[a.instance.id];
                                         const meta = pvAuto?.meta ?? {};
+                                        const sections = Array.isArray(pvAuto?.sections) ? pvAuto.sections : [];
+
+                                        if (meta?.mode === 'MEMBRE_FILTER') {
+                                          return (
+                                            <div className="space-y-6">
+                                              {sections.length === 0 ? (
+                                                <p className="text-sm text-gray-600 dark:text-gray-400">Aucun membre trouvé.</p>
+                                              ) : (
+                                                sections.map((s: any) => (
+                                                  <div key={String(s.sectionId ?? s.sectionName ?? '')} className="rounded-md border border-gray-200 dark:border-gray-800">
+                                                    <div className="border-b border-gray-200 dark:border-gray-800 px-3 py-2">
+                                                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                                        Section: {s.sectionName || s.sectionId}
+                                                      </p>
+                                                    </div>
+
+                                                    <div className="p-3">
+                                                      <div className="overflow-x-auto">
+                                                        <table className="w-full text-sm border border-gray-200 dark:border-gray-800">
+                                                          <thead className="bg-gray-50 dark:bg-gray-900">
+                                                            <tr>
+                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Prénom</th>
+                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Nom</th>
+                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Genre</th>
+                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Fonction</th>
+                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Corps de métier</th>
+                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Groupe sanguin</th>
+                                                              <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Carte électeur</th>
+                                                            </tr>
+                                                          </thead>
+                                                          <tbody>
+                                                            {(Array.isArray(s.membres) ? s.membres : []).map((m: any) => (
+                                                              <tr key={String(m.id)} className="odd:bg-white even:bg-gray-50 dark:odd:bg-gray-950 dark:even:bg-gray-900/40">
+                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.prenom)}</td>
+                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.nom)}</td>
+                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.genre)}</td>
+                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.fonction)}</td>
+                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.corpsMetier)}</td>
+                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.groupeSanguin)}</td>
+                                                                <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.numeroCarteElecteur)}</td>
+                                                              </tr>
+                                                            ))}
+                                                          </tbody>
+                                                        </table>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                ))
+                                              )}
+                                            </div>
+                                          );
+                                        }
+
                                         const selectedFields: string[] = Array.isArray(meta?.selectedFields)
                                           ? meta.selectedFields.map(String)
                                           : [];
                                         const columns = selectedFields.filter((k) => k !== 'section');
-                                        const sections = Array.isArray(pvAuto?.sections) ? pvAuto.sections : [];
 
                                         return (
                                           <div className="space-y-6">
