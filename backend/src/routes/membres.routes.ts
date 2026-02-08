@@ -83,13 +83,22 @@ router.get('/corps-metiers', authenticate, async (req: AuthRequest, res: Respons
       } else {
         where.section = { sousLocaliteId: user.sousLocaliteId };
       }
-    } else if (user.role === 'LOCALITE') {
+    } else if (user.role === 'LOCALITE' || user.role === 'ORG_UNIT_RESP') {
       const creatorUser = await prisma.user.findUnique({
         where: { id: user.userId },
-        select: { sousLocalite: { select: { localiteId: true } } },
+        select: {
+          localiteId: true,
+          sousLocalite: { select: { localiteId: true } },
+          section: { select: { sousLocalite: { select: { localiteId: true } } } },
+        },
       });
 
-      let localiteId = (creatorUser as any)?.sousLocalite?.localiteId ?? null;
+      let localiteId =
+        (user as any)?.localiteId ??
+        (creatorUser as any)?.localiteId ??
+        (creatorUser as any)?.sousLocalite?.localiteId ??
+        (creatorUser as any)?.section?.sousLocalite?.localiteId ??
+        null;
       if (!localiteId) {
         const anySousLocalite = await prisma.sousLocalite.findFirst({
           where: { createdById: user.userId },
@@ -188,13 +197,22 @@ router.get('/groupes-sanguins', authenticate, async (req: AuthRequest, res: Resp
       } else {
         where.section = { sousLocaliteId: user.sousLocaliteId };
       }
-    } else if (user.role === 'LOCALITE') {
+    } else if (user.role === 'LOCALITE' || user.role === 'ORG_UNIT_RESP') {
       const creatorUser = await prisma.user.findUnique({
         where: { id: user.userId },
-        select: { sousLocalite: { select: { localiteId: true } } },
+        select: {
+          localiteId: true,
+          sousLocalite: { select: { localiteId: true } },
+          section: { select: { sousLocalite: { select: { localiteId: true } } } },
+        },
       });
 
-      let localiteId = (creatorUser as any)?.sousLocalite?.localiteId ?? null;
+      let localiteId =
+        (user as any)?.localiteId ??
+        (creatorUser as any)?.localiteId ??
+        (creatorUser as any)?.sousLocalite?.localiteId ??
+        (creatorUser as any)?.section?.sousLocalite?.localiteId ??
+        null;
       if (!localiteId) {
         const anySousLocalite = await prisma.sousLocalite.findFirst({
           where: { createdById: user.userId },

@@ -73,6 +73,9 @@ export default function MonInstitutionPage() {
   const [pvAutoGroupeSanguinByInstanceId, setPvAutoGroupeSanguinByInstanceId] = useState<Record<string, string>>({});
   const [pvAutoStatutElecteurByInstanceId, setPvAutoStatutElecteurByInstanceId] = useState<Record<string, string>>({});
 
+  const [pvAutoCorpsMetierSearchByInstanceId, setPvAutoCorpsMetierSearchByInstanceId] = useState<Record<string, string>>({});
+  const [pvAutoGroupeSanguinSearchByInstanceId, setPvAutoGroupeSanguinSearchByInstanceId] = useState<Record<string, string>>({});
+
   const [corpsMetiers, setCorpsMetiers] = useState<string[]>([]);
   const [groupesSanguins, setGroupesSanguins] = useState<string[]>([]);
 
@@ -623,49 +626,161 @@ export default function MonInstitutionPage() {
                                     return (
                                       <div className="mt-3 grid gap-2 sm:grid-cols-3">
                                         {defCode === 'CORPORATIVE' ? (
-                                          <div className="sm:col-span-2">
-                                            <label className="text-xs text-gray-600 dark:text-gray-400">Corps de métier</label>
-                                            <select
-                                              className="mt-1 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
-                                              value={pvAutoCorpsMetierByInstanceId[a.instance.id] ?? ''}
-                                              onChange={(e) => setPvAutoCorpsMetierByInstanceId((prev) => ({ ...prev, [a.instance.id]: e.target.value }))}
-                                            >
-                                              <option value="">Tous</option>
-                                              {corpsMetiers.map((v) => (
-                                                <option key={v} value={v}>
-                                                  {v}
-                                                </option>
-                                              ))}
-                                            </select>
+                                          <div className="sm:col-span-2 rounded-md border border-gray-200 dark:border-gray-800">
+                                            <div className="border-b border-gray-200 dark:border-gray-800 px-3 py-2">
+                                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Filtre: Corps de métier</p>
+                                              <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                Sélection actuelle: {pvAutoCorpsMetierByInstanceId[a.instance.id] ? pvAutoCorpsMetierByInstanceId[a.instance.id] : 'Tous'}
+                                              </p>
+                                            </div>
+                                            <div className="p-3 space-y-2">
+                                              <input
+                                                className="w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
+                                                placeholder="Rechercher un corps de métier…"
+                                                value={pvAutoCorpsMetierSearchByInstanceId[a.instance.id] ?? ''}
+                                                onChange={(e) =>
+                                                  setPvAutoCorpsMetierSearchByInstanceId((prev) => ({
+                                                    ...prev,
+                                                    [a.instance.id]: e.target.value,
+                                                  }))
+                                                }
+                                              />
+
+                                              <div className="max-h-56 overflow-auto rounded-md border border-gray-200 dark:border-gray-800">
+                                                <table className="w-full text-sm">
+                                                  <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
+                                                    <tr>
+                                                      <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800">Option</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    {(() => {
+                                                      const q = (pvAutoCorpsMetierSearchByInstanceId[a.instance.id] ?? '').trim().toLowerCase();
+                                                      const options = corpsMetiers.filter((v) => (q ? v.toLowerCase().includes(q) : true));
+                                                      const rows = ['', ...options];
+                                                      return rows.map((v) => {
+                                                        const label = v ? v : 'Tous';
+                                                        const isSelected = (pvAutoCorpsMetierByInstanceId[a.instance.id] ?? '') === v;
+                                                        return (
+                                                          <tr
+                                                            key={label}
+                                                            className={`cursor-pointer ${isSelected ? 'bg-primary/10' : ''} odd:bg-white even:bg-gray-50 dark:odd:bg-gray-950 dark:even:bg-gray-900/40`}
+                                                            onClick={() =>
+                                                              setPvAutoCorpsMetierByInstanceId((prev) => ({
+                                                                ...prev,
+                                                                [a.instance.id]: v,
+                                                              }))
+                                                            }
+                                                          >
+                                                            <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">{label}</td>
+                                                          </tr>
+                                                        );
+                                                      });
+                                                    })()}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </div>
                                           </div>
                                         ) : defCode === 'SANTE' ? (
-                                          <div className="sm:col-span-2">
-                                            <label className="text-xs text-gray-600 dark:text-gray-400">Groupe sanguin</label>
-                                            <select
-                                              className="mt-1 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
-                                              value={pvAutoGroupeSanguinByInstanceId[a.instance.id] ?? ''}
-                                              onChange={(e) => setPvAutoGroupeSanguinByInstanceId((prev) => ({ ...prev, [a.instance.id]: e.target.value }))}
-                                            >
-                                              <option value="">Tous</option>
-                                              {groupesSanguins.map((v) => (
-                                                <option key={v} value={v}>
-                                                  {v}
-                                                </option>
-                                              ))}
-                                            </select>
+                                          <div className="sm:col-span-2 rounded-md border border-gray-200 dark:border-gray-800">
+                                            <div className="border-b border-gray-200 dark:border-gray-800 px-3 py-2">
+                                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Filtre: Groupe sanguin</p>
+                                              <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                Sélection actuelle: {pvAutoGroupeSanguinByInstanceId[a.instance.id] ? pvAutoGroupeSanguinByInstanceId[a.instance.id] : 'Tous'}
+                                              </p>
+                                            </div>
+                                            <div className="p-3 space-y-2">
+                                              <input
+                                                className="w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
+                                                placeholder="Rechercher un groupe sanguin…"
+                                                value={pvAutoGroupeSanguinSearchByInstanceId[a.instance.id] ?? ''}
+                                                onChange={(e) =>
+                                                  setPvAutoGroupeSanguinSearchByInstanceId((prev) => ({
+                                                    ...prev,
+                                                    [a.instance.id]: e.target.value,
+                                                  }))
+                                                }
+                                              />
+
+                                              <div className="max-h-56 overflow-auto rounded-md border border-gray-200 dark:border-gray-800">
+                                                <table className="w-full text-sm">
+                                                  <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
+                                                    <tr>
+                                                      <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800">Option</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    {(() => {
+                                                      const q = (pvAutoGroupeSanguinSearchByInstanceId[a.instance.id] ?? '').trim().toLowerCase();
+                                                      const options = groupesSanguins.filter((v) => (q ? v.toLowerCase().includes(q) : true));
+                                                      const rows = ['', ...options];
+                                                      return rows.map((v) => {
+                                                        const label = v ? v : 'Tous';
+                                                        const isSelected = (pvAutoGroupeSanguinByInstanceId[a.instance.id] ?? '') === v;
+                                                        return (
+                                                          <tr
+                                                            key={label}
+                                                            className={`cursor-pointer ${isSelected ? 'bg-primary/10' : ''} odd:bg-white even:bg-gray-50 dark:odd:bg-gray-950 dark:even:bg-gray-900/40`}
+                                                            onClick={() =>
+                                                              setPvAutoGroupeSanguinByInstanceId((prev) => ({
+                                                                ...prev,
+                                                                [a.instance.id]: v,
+                                                              }))
+                                                            }
+                                                          >
+                                                            <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">{label}</td>
+                                                          </tr>
+                                                        );
+                                                      });
+                                                    })()}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </div>
                                           </div>
                                         ) : (
-                                          <div className="sm:col-span-2">
-                                            <label className="text-xs text-gray-600 dark:text-gray-400">Statut électeur</label>
-                                            <select
-                                              className="mt-1 w-full rounded-md border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 px-3 py-2 text-sm"
-                                              value={pvAutoStatutElecteurByInstanceId[a.instance.id] ?? ''}
-                                              onChange={(e) => setPvAutoStatutElecteurByInstanceId((prev) => ({ ...prev, [a.instance.id]: e.target.value }))}
-                                            >
-                                              <option value="">Tous</option>
-                                              <option value="VOTANT">Votant</option>
-                                              <option value="NON_VOTANT">Non votant</option>
-                                            </select>
+                                          <div className="sm:col-span-2 rounded-md border border-gray-200 dark:border-gray-800">
+                                            <div className="border-b border-gray-200 dark:border-gray-800 px-3 py-2">
+                                              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Filtre: Statut électeur</p>
+                                              <p className="text-xs text-gray-600 dark:text-gray-400">
+                                                Sélection actuelle: {pvAutoStatutElecteurByInstanceId[a.instance.id] ? pvAutoStatutElecteurByInstanceId[a.instance.id] : 'Tous'}
+                                              </p>
+                                            </div>
+                                            <div className="p-3">
+                                              <div className="rounded-md border border-gray-200 dark:border-gray-800">
+                                                <table className="w-full text-sm">
+                                                  <thead className="bg-gray-50 dark:bg-gray-900">
+                                                    <tr>
+                                                      <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800">Option</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody>
+                                                    {[
+                                                      { value: '', label: 'Tous' },
+                                                      { value: 'VOTANT', label: 'Votant' },
+                                                      { value: 'NON_VOTANT', label: 'Non votant' },
+                                                    ].map((opt) => {
+                                                      const isSelected = (pvAutoStatutElecteurByInstanceId[a.instance.id] ?? '') === opt.value;
+                                                      return (
+                                                        <tr
+                                                          key={opt.value || 'ALL'}
+                                                          className={`cursor-pointer ${isSelected ? 'bg-primary/10' : ''} odd:bg-white even:bg-gray-50 dark:odd:bg-gray-950 dark:even:bg-gray-900/40`}
+                                                          onClick={() =>
+                                                            setPvAutoStatutElecteurByInstanceId((prev) => ({
+                                                              ...prev,
+                                                              [a.instance.id]: opt.value,
+                                                            }))
+                                                          }
+                                                        >
+                                                          <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">{opt.label}</td>
+                                                        </tr>
+                                                      );
+                                                    })}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </div>
                                           </div>
                                         )}
 
