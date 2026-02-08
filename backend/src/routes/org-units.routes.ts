@@ -75,18 +75,15 @@ const bootstrapOrgUnitsForLocalite = async (localiteId: string): Promise<{ creat
     upserted.push(row);
   }
 
-  const sectionIds = await getLocaliteScopeSectionIds(localiteId);
   const instanceRows: { definitionId: string; scopeType: any; scopeId: string }[] = [];
   for (const def of upserted) {
     instanceRows.push({ definitionId: def.id, scopeType: 'LOCALITE', scopeId: localiteId });
-    for (const sid of sectionIds) {
-      instanceRows.push({ definitionId: def.id, scopeType: 'SECTION', scopeId: sid });
-    }
   }
 
   const before = await prisma.orgUnitInstance.count({
     where: {
-      OR: [{ scopeType: 'LOCALITE', scopeId: localiteId }, { scopeType: 'SECTION', scopeId: { in: sectionIds } }],
+      scopeType: 'LOCALITE' as any,
+      scopeId: localiteId,
     },
   });
 
@@ -99,13 +96,73 @@ const bootstrapOrgUnitsForLocalite = async (localiteId: string): Promise<{ creat
 
   const after = await prisma.orgUnitInstance.count({
     where: {
-      OR: [{ scopeType: 'LOCALITE', scopeId: localiteId }, { scopeType: 'SECTION', scopeId: { in: sectionIds } }],
+      scopeType: 'LOCALITE' as any,
+      scopeId: localiteId,
     },
   });
 
   return {
     createdDefinitions: upserted.length,
     createdInstances: Math.max(0, after - before),
+  };
+};
+
+const repairOrgUnitsForLocalite = async (localiteId: string): Promise<{ hiddenSectionInstances: number; hiddenDuplicateLocaliteInstances: number }> => {
+  const sectionIds = await getLocaliteScopeSectionIds(localiteId);
+
+  const hiddenSection = sectionIds.length
+    ? await prisma.orgUnitInstance.updateMany({
+        where: {
+          scopeType: 'SECTION' as any,
+          scopeId: { in: sectionIds },
+          isVisible: true,
+        },
+        data: {
+          isVisible: false,
+        },
+      })
+    : { count: 0 };
+
+  const localiteInstances = await prisma.orgUnitInstance.findMany({
+    where: {
+      scopeType: 'LOCALITE' as any,
+      scopeId: localiteId,
+    },
+    select: {
+      id: true,
+      definitionId: true,
+      createdAt: true,
+      isVisible: true,
+    },
+    orderBy: [{ createdAt: 'asc' }],
+  });
+
+  const keepIdByDefinitionId = new Map<string, string>();
+  const duplicateIds: string[] = [];
+  for (const inst of localiteInstances) {
+    const defId = inst.definitionId;
+    if (!keepIdByDefinitionId.has(defId)) {
+      keepIdByDefinitionId.set(defId, inst.id);
+      continue;
+    }
+    duplicateIds.push(inst.id);
+  }
+
+  const hiddenDuplicates = duplicateIds.length
+    ? await prisma.orgUnitInstance.updateMany({
+        where: {
+          id: { in: duplicateIds },
+          isVisible: true,
+        },
+        data: {
+          isVisible: false,
+        },
+      })
+    : { count: 0 };
+
+  return {
+    hiddenSectionInstances: hiddenSection.count,
+    hiddenDuplicateLocaliteInstances: hiddenDuplicates.count,
   };
 };
 
@@ -958,6 +1015,19 @@ router.get('/instances', authorize('LOCALITE'), async (req: AuthRequest, res: Re
       await bootstrapOrgUnitsForLocalite(localiteId);
     }
 
+    const existingSectionVisible = sectionIdsForScope.length
+      ? await prisma.orgUnitInstance.count({
+          where: {
+            scopeType: 'SECTION' as any,
+            scopeId: { in: sectionIdsForScope },
+            isVisible: true,
+          },
+        })
+      : 0;
+    if (existingSectionVisible > 0) {
+      await repairOrgUnitsForLocalite(localiteId);
+    }
+
     const kind = String(req.query.kind ?? '').trim().toUpperCase();
     const scopeType = String(req.query.scopeType ?? '').trim().toUpperCase();
 
@@ -1037,7 +1107,8 @@ router.post('/bootstrap', authorize('LOCALITE'), async (req: AuthRequest, res: R
     if (!localiteId) return;
 
     const result = await bootstrapOrgUnitsForLocalite(localiteId);
-    res.json({ message: 'Bootstrap effectué', ...result });
+    const repair = await repairOrgUnitsForLocalite(localiteId);
+    res.json({ message: 'Bootstrap effectué', ...result, ...repair });
   } catch (error) {
     console.error('Erreur org-units/bootstrap:', error);
     res.status(500).json({ error: 'Erreur lors du bootstrap Cellules/Commissions' });
