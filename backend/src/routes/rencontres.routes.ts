@@ -206,6 +206,109 @@ router.post(
   }
 );
 
+router.get(
+  '/sections-history',
+  authenticate,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const { userId, role } = req.user!;
+      if (role !== 'SOUS_LOCALITE_ADMIN') {
+        res.status(403).json({ error: 'Accès non autorisé' });
+        return;
+      }
+
+      const typeId = String(req.query.typeId ?? '').trim();
+      const dateDebut = String(req.query.dateDebut ?? '').trim();
+      const dateFin = String(req.query.dateFin ?? '').trim();
+      const q = String(req.query.q ?? '').trim();
+
+      const actor = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { sousLocaliteId: true },
+      });
+      if (!actor?.sousLocaliteId) {
+        res.status(403).json({ error: 'Sous-localité non définie pour cet utilisateur' });
+        return;
+      }
+
+      const sections = await prisma.section.findMany({
+        where: { sousLocaliteId: actor.sousLocaliteId },
+        select: { id: true, name: true },
+        orderBy: { name: 'asc' },
+      });
+
+      const sectionIds = sections.map((s) => s.id);
+      if (!sectionIds.length) {
+        res.json({ sousLocaliteId: actor.sousLocaliteId, sections: [] });
+        return;
+      }
+
+      const whereAnd: any[] = [{ sectionId: { in: sectionIds } }];
+      if (typeId) whereAnd.push({ typeId });
+      if (dateDebut) {
+        const d = new Date(dateDebut);
+        if (!Number.isNaN(d.getTime())) whereAnd.push({ date: { gte: d } });
+      }
+      if (dateFin) {
+        const d = new Date(dateFin);
+        if (!Number.isNaN(d.getTime())) whereAnd.push({ date: { lte: d } });
+      }
+      if (q) {
+        whereAnd.push({
+          OR: [
+            { theme: { contains: q, mode: 'insensitive' } },
+            { moderateur: { contains: q, mode: 'insensitive' } },
+            { moniteur: { contains: q, mode: 'insensitive' } },
+            { lieuTexte: { contains: q, mode: 'insensitive' } },
+          ],
+        });
+      }
+
+      const rencontres = await prisma.rencontre.findMany({
+        where: whereAnd.length ? { AND: whereAnd } : {},
+        include: {
+          type: true,
+          lieuMembre: {
+            select: {
+              id: true,
+              prenom: true,
+              nom: true,
+            },
+          },
+          section: {
+            select: { id: true, name: true },
+          },
+          createdBy: {
+            select: { id: true, name: true, email: true },
+          },
+        },
+        orderBy: [{ sectionId: 'asc' }, { date: 'desc' }, { createdAt: 'desc' }],
+        take: 5000,
+      });
+
+      const bySectionId = new Map<string, { sectionId: string; sectionName: string; total: number; rencontres: any[] }>();
+      for (const s of sections) {
+        bySectionId.set(s.id, { sectionId: s.id, sectionName: s.name, total: 0, rencontres: [] });
+      }
+      for (const r of rencontres as any[]) {
+        const sid = r.section?.id ?? r.sectionId;
+        const bucket = bySectionId.get(sid);
+        if (!bucket) continue;
+        bucket.rencontres.push(r);
+        bucket.total += 1;
+      }
+
+      res.json({
+        sousLocaliteId: actor.sousLocaliteId,
+        sections: Array.from(bySectionId.values()),
+      });
+    } catch (error) {
+      console.error('Erreur récupération historique sections:', error);
+      res.status(500).json({ error: 'Erreur lors de la récupération de l\'historique' });
+    }
+  }
+);
+
 /**
  * @swagger
  * /api/rencontres:

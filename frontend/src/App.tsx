@@ -26,6 +26,7 @@ import MonInstitutionPage from './pages/MonInstitutionPage';
 import CellulesPage from './pages/CellulesPage';
 import CommissionsPage from './pages/CommissionsPage';
 import PvCellulesPage from './pages/PvCellulesPage';
+import HistoriqueSectionsPage from './pages/HistoriqueSectionsPage';
 
 // Layout
 import Layout from './components/Layout';
@@ -146,6 +147,7 @@ function App() {
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="mes-rencontres" element={<MesRencontresPage />} />
           <Route path="rencontres" element={<RencontresPage />} />
+          <Route path="historique-sections" element={<HistoriqueSectionsPage />} />
           <Route path="rencontres/new" element={<CreateRencontrePage />} />
           <Route path="rencontres/:id/edit" element={<EditRencontrePage />} />
           <Route path="rencontres/:id" element={<RencontreDetailPage />} />

@@ -167,6 +167,7 @@ export default function Layout() {
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { name: 'Mes Rencontres', href: '/mes-rencontres', icon: CalendarCheck },
     { name: 'Historique', href: '/rencontres', icon: Calendar },
+    { name: 'Historique sections', href: '/historique-sections', icon: Calendar, roles: ['SOUS_LOCALITE_ADMIN'] },
     { name: 'Membres', href: '/membres', icon: Users },
     { name: 'Cellules', href: '/cellules', icon: Building2, roles: ['LOCALITE', 'SOUS_LOCALITE_ADMIN', 'SECTION_USER'] },
     { name: 'Commissions', href: '/commissions', icon: Building2, roles: ['LOCALITE', 'SOUS_LOCALITE_ADMIN', 'SECTION_USER'] },
