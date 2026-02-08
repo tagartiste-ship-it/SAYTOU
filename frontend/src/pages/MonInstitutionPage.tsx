@@ -76,7 +76,9 @@ export default function MonInstitutionPage() {
   const [pvAutoCorpsMetierSearchByInstanceId, setPvAutoCorpsMetierSearchByInstanceId] = useState<Record<string, string>>({});
   const [pvAutoGroupeSanguinSearchByInstanceId, setPvAutoGroupeSanguinSearchByInstanceId] = useState<Record<string, string>>({});
 
-  const [corpsMetiers, setCorpsMetiers] = useState<string[]>([]);
+  const [corpsMetierItems, setCorpsMetierItems] = useState<Array<{ label: string; count: number }>>([]);
+  const [corpsMetierTotal, setCorpsMetierTotal] = useState<number>(0);
+  const [corpsMetierTotalMembres, setCorpsMetierTotalMembres] = useState<number>(0);
   const [groupesSanguins, setGroupesSanguins] = useState<string[]>([]);
 
   const [membersByInstanceId, setMembersByInstanceId] = useState<Record<string, OrgUnitMemberDto[]>>({});
@@ -164,13 +166,19 @@ export default function MonInstitutionPage() {
     const loadFilters = async () => {
       try {
         const [cmRes, gsRes] = await Promise.all([
-          api.get<{ corpsMetiers: string[] }>('/membres/corps-metiers'),
+          api.get<{ total: number; totalMembres: number; items: Array<{ label: string; count: number }> }>('/membres/corps-metiers-stats'),
           api.get<{ groupesSanguins: string[] }>('/membres/groupes-sanguins'),
         ]);
-        setCorpsMetiers(Array.isArray(cmRes.data?.corpsMetiers) ? cmRes.data.corpsMetiers : []);
+
+        const items = Array.isArray(cmRes.data?.items) ? cmRes.data.items : [];
+        setCorpsMetierItems(items);
+        setCorpsMetierTotal(Number(cmRes.data?.total ?? items.length) || items.length);
+        setCorpsMetierTotalMembres(Number(cmRes.data?.totalMembres ?? 0) || 0);
         setGroupesSanguins(Array.isArray(gsRes.data?.groupesSanguins) ? gsRes.data.groupesSanguins : []);
       } catch {
-        setCorpsMetiers([]);
+        setCorpsMetierItems([]);
+        setCorpsMetierTotal(0);
+        setCorpsMetierTotalMembres(0);
         setGroupesSanguins([]);
       }
     };
@@ -316,7 +324,7 @@ export default function MonInstitutionPage() {
     return lines.join('\n').trim() + '\n';
   };
 
-  const fetchPvAuto = async (instanceId: string) => {
+  const fetchPvAuto = async (instanceId: string, overrideParams?: { corpsMetier?: string; groupeSanguin?: string; statutElecteur?: string }) => {
     setPvAutoLoadingByInstanceId((prev) => ({ ...prev, [instanceId]: true }));
     try {
       const period = pvAutoPeriodByInstanceId[instanceId];
@@ -331,13 +339,13 @@ export default function MonInstitutionPage() {
         if (period?.to) params.to = period.to;
       } else {
         if (defCode === 'CORPORATIVE') {
-          const v = pvAutoCorpsMetierByInstanceId[instanceId];
+          const v = overrideParams?.corpsMetier ?? pvAutoCorpsMetierByInstanceId[instanceId];
           if (v) params.corpsMetier = v;
         } else if (defCode === 'SANTE') {
-          const v = pvAutoGroupeSanguinByInstanceId[instanceId];
+          const v = overrideParams?.groupeSanguin ?? pvAutoGroupeSanguinByInstanceId[instanceId];
           if (v) params.groupeSanguin = v;
         } else if (defCode === 'CSU') {
-          const v = pvAutoStatutElecteurByInstanceId[instanceId];
+          const v = overrideParams?.statutElecteur ?? pvAutoStatutElecteurByInstanceId[instanceId];
           if (v) params.statutElecteur = v;
         }
       }
@@ -629,9 +637,25 @@ export default function MonInstitutionPage() {
                                           <div className="sm:col-span-2 rounded-md border border-gray-200 dark:border-gray-800">
                                             <div className="border-b border-gray-200 dark:border-gray-800 px-3 py-2">
                                               <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">Filtre: Corps de métier</p>
-                                              <p className="text-xs text-gray-600 dark:text-gray-400">
-                                                Sélection actuelle: {pvAutoCorpsMetierByInstanceId[a.instance.id] ? pvAutoCorpsMetierByInstanceId[a.instance.id] : 'Tous'}
-                                              </p>
+                                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                                                <span>Total corps: {corpsMetierTotal}</span>
+                                                <span>•</span>
+                                                <span>
+                                                  Sélection: {pvAutoCorpsMetierByInstanceId[a.instance.id] ? pvAutoCorpsMetierByInstanceId[a.instance.id] : 'Tous'}
+                                                </span>
+                                                {(() => {
+                                                  const selected = pvAutoCorpsMetierByInstanceId[a.instance.id] ?? '';
+                                                  const selectedCount = selected
+                                                    ? (corpsMetierItems.find((x) => x.label === selected)?.count ?? 0)
+                                                    : corpsMetierTotalMembres;
+                                                  return (
+                                                    <>
+                                                      <span>•</span>
+                                                      <span>Membres: {selectedCount}</span>
+                                                    </>
+                                                  );
+                                                })()}
+                                              </div>
                                             </div>
                                             <div className="p-3 space-y-2">
                                               <input
@@ -646,39 +670,46 @@ export default function MonInstitutionPage() {
                                                 }
                                               />
 
-                                              <div className="max-h-56 overflow-auto rounded-md border border-gray-200 dark:border-gray-800">
-                                                <table className="w-full text-sm">
-                                                  <thead className="bg-gray-50 dark:bg-gray-900 sticky top-0">
-                                                    <tr>
-                                                      <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800">Option</th>
-                                                    </tr>
-                                                  </thead>
-                                                  <tbody>
-                                                    {(() => {
-                                                      const q = (pvAutoCorpsMetierSearchByInstanceId[a.instance.id] ?? '').trim().toLowerCase();
-                                                      const options = corpsMetiers.filter((v) => (q ? v.toLowerCase().includes(q) : true));
-                                                      const rows = ['', ...options];
-                                                      return rows.map((v) => {
-                                                        const label = v ? v : 'Tous';
-                                                        const isSelected = (pvAutoCorpsMetierByInstanceId[a.instance.id] ?? '') === v;
+                                              <div className="max-h-64 overflow-auto rounded-md border border-gray-200 dark:border-gray-800 p-2">
+                                                {(() => {
+                                                  const q = (pvAutoCorpsMetierSearchByInstanceId[a.instance.id] ?? '').trim().toLowerCase();
+                                                  const options = corpsMetierItems.filter((x) => (q ? x.label.toLowerCase().includes(q) : true));
+                                                  const rows: Array<{ label: string; count: number }> = [{ label: '', count: corpsMetierTotalMembres }, ...options];
+
+                                                  return (
+                                                    <div className="grid gap-2 sm:grid-cols-2">
+                                                      {rows.map((x) => {
+                                                        const isAll = !x.label;
+                                                        const label = isAll ? 'Tous' : x.label;
+                                                        const isSelected = (pvAutoCorpsMetierByInstanceId[a.instance.id] ?? '') === x.label;
+
                                                         return (
-                                                          <tr
+                                                          <button
                                                             key={label}
-                                                            className={`cursor-pointer ${isSelected ? 'bg-primary/10' : ''} odd:bg-white even:bg-gray-50 dark:odd:bg-gray-950 dark:even:bg-gray-900/40`}
-                                                            onClick={() =>
-                                                              setPvAutoCorpsMetierByInstanceId((prev) => ({
-                                                                ...prev,
-                                                                [a.instance.id]: v,
-                                                              }))
-                                                            }
+                                                            type="button"
+                                                            className={`w-full text-left rounded-md border px-3 py-2 text-sm transition-colors ${
+                                                              isSelected
+                                                                ? 'border-primary bg-primary/10'
+                                                                : 'border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/40'
+                                                            }`}
+                                                            onClick={() => {
+                                                              const v = x.label;
+                                                              setPvAutoCorpsMetierByInstanceId((prev) => ({ ...prev, [a.instance.id]: v }));
+                                                              void fetchPvAuto(a.instance.id, { corpsMetier: v });
+                                                            }}
                                                           >
-                                                            <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800">{label}</td>
-                                                          </tr>
+                                                            <div className="flex items-center justify-between gap-3">
+                                                              <span className="font-medium text-gray-900 dark:text-gray-100 truncate">{label}</span>
+                                                              <span className="shrink-0 rounded-full bg-gray-100 dark:bg-gray-900 px-2 py-0.5 text-xs text-gray-700 dark:text-gray-300">
+                                                                {x.count}
+                                                              </span>
+                                                            </div>
+                                                          </button>
                                                         );
-                                                      });
-                                                    })()}
-                                                  </tbody>
-                                                </table>
+                                                      })}
+                                                    </div>
+                                                  );
+                                                })()}
                                               </div>
                                             </div>
                                           </div>
@@ -804,7 +835,7 @@ export default function MonInstitutionPage() {
                                         const sections = Array.isArray(pvAuto?.sections) ? pvAuto.sections : [];
 
                                         if (meta?.mode === 'MEMBRE_FILTER') {
-                                          const defCode = String(a.instance.definition.code ?? '').trim().toUpperCase();
+                                          const defCode = String(meta?.definition?.code ?? a.instance.definition.code ?? '').trim().toUpperCase();
                                           return (
                                             <div className="space-y-6">
                                               {sections.length === 0 ? (

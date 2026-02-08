@@ -75,6 +75,161 @@ const levenshtein = (a: string, b: string): number => {
 
   return dp[b.length];
 };
+
+const maxDistFor = (s: string) => {
+  if (s.length <= 4) return 0;
+  if (s.length <= 7) return 1;
+  if (s.length <= 12) return 2;
+  return 3;
+};
+
+const mergeSimilarLabelsWithCounts = (items: Array<{ label: string; count: number }>) => {
+  type Cluster = { key: string; items: Array<{ label: string; norm: string; count: number }> };
+  const clusters: Cluster[] = [];
+
+  for (const it of items) {
+    const raw = String(it.label ?? '').trim();
+    const count = Number(it.count ?? 0) || 0;
+    const norm = normalizeLoose(raw);
+    if (!raw || !norm) continue;
+
+    let found: Cluster | null = null;
+    for (const c of clusters) {
+      const d = levenshtein(norm, c.key);
+      const maxDist = Math.min(maxDistFor(norm), maxDistFor(c.key));
+      if (d <= maxDist) {
+        found = c;
+        break;
+      }
+    }
+
+    const entry = { label: raw, norm, count };
+    if (found) found.items.push(entry);
+    else clusters.push({ key: norm, items: [entry] });
+  }
+
+  const merged = clusters
+    .map((c) => {
+      const total = c.items.reduce((sum, x) => sum + (Number(x.count) || 0), 0);
+      const sorted = [...c.items].sort((a, b) => (b.count - a.count) || (a.label.length - b.label.length) || a.label.localeCompare(b.label));
+      return { label: sorted[0]!.label, count: total };
+    })
+    .filter((x) => x.label);
+
+  merged.sort((a, b) => a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' }));
+  return merged;
+};
+
+const buildScopeWhereForCorpsMetier = async (req: AuthRequest) => {
+  const user = req.user;
+  if (!user) return { error: { status: 401, message: 'Non authentifié' } } as const;
+
+  const sectionIdParam = String(req.query.sectionId ?? '').trim();
+  const where: any = {
+    corpsMetier: {
+      not: null,
+    },
+  };
+
+  if (user.role === 'SECTION_USER') {
+    if (!user.sectionId) return { error: { status: 403, message: 'Section non définie pour cet utilisateur' } } as const;
+    where.sectionId = user.sectionId;
+    return { where } as const;
+  }
+
+  if (user.role === 'SOUS_LOCALITE_ADMIN') {
+    if (!user.sousLocaliteId) return { error: { status: 403, message: 'Sous-localité non définie pour cet utilisateur' } } as const;
+
+    if (sectionIdParam) {
+      const section = await prisma.section.findUnique({
+        where: { id: sectionIdParam },
+        select: { sousLocaliteId: true },
+      });
+      if (!section || section.sousLocaliteId !== user.sousLocaliteId) return { error: { status: 403, message: 'Accès non autorisé' } } as const;
+      where.sectionId = sectionIdParam;
+    } else {
+      where.section = { sousLocaliteId: user.sousLocaliteId };
+    }
+
+    return { where } as const;
+  }
+
+  if (user.role === 'LOCALITE' || user.role === 'ORG_UNIT_RESP') {
+    const creatorUser = await prisma.user.findUnique({
+      where: { id: user.userId },
+      select: {
+        localiteId: true,
+        sousLocalite: { select: { localiteId: true } },
+        section: { select: { sousLocalite: { select: { localiteId: true } } } },
+      },
+    });
+
+    let localiteId =
+      (user as any)?.localiteId ??
+      (creatorUser as any)?.localiteId ??
+      (creatorUser as any)?.sousLocalite?.localiteId ??
+      (creatorUser as any)?.section?.sousLocalite?.localiteId ??
+      null;
+    if (!localiteId) {
+      const anySousLocalite = await prisma.sousLocalite.findFirst({
+        where: { createdById: user.userId },
+        select: { localiteId: true },
+        orderBy: { createdAt: 'asc' },
+      });
+      localiteId = (anySousLocalite as any)?.localiteId ?? null;
+    }
+
+    if (!localiteId) return { error: { status: 403, message: 'Localité non définie pour cet utilisateur' } } as const;
+
+    if (sectionIdParam) {
+      const section = await prisma.section.findUnique({
+        where: { id: sectionIdParam },
+        select: { sousLocalite: { select: { localiteId: true } } },
+      });
+      if (!section || (section as any).sousLocalite.localiteId !== localiteId) return { error: { status: 403, message: 'Accès non autorisé' } } as const;
+      where.sectionId = sectionIdParam;
+    } else {
+      where.section = { sousLocalite: { localiteId } };
+    }
+
+    return { where } as const;
+  }
+
+  if (!sectionIdParam) return { error: { status: 400, message: 'sectionId requis' } } as const;
+  where.sectionId = sectionIdParam;
+  return { where } as const;
+};
+
+router.get('/corps-metiers-stats', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const scoped = await buildScopeWhereForCorpsMetier(req);
+    if ('error' in scoped) {
+      res.status(scoped.error.status).json({ error: scoped.error.message });
+      return;
+    }
+
+    const rows = await prisma.membre.groupBy({
+      by: ['corpsMetier'],
+      where: scoped.where,
+      _count: { corpsMetier: true },
+      orderBy: { corpsMetier: 'asc' },
+    });
+
+    const baseItems = (rows as any[])
+      .map((r) => ({ label: String(r.corpsMetier ?? '').trim(), count: Number(r?._count?.corpsMetier ?? 0) || 0 }))
+      .filter((x) => x.label);
+
+    const merged = mergeSimilarLabelsWithCounts(baseItems);
+    const total = merged.length;
+    const totalMembres = merged.reduce((sum, x) => sum + (Number(x.count) || 0), 0);
+
+    res.json({ total, totalMembres, items: merged });
+  } catch (error: any) {
+    console.error('Erreur récupération corps de métier stats:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 router.get('/corps-metiers', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user;
@@ -183,48 +338,9 @@ router.get('/corps-metiers', authenticate, async (req: AuthRequest, res: Respons
       .filter((v) => v);
 
     // Fusion: mêmes valeurs (casse/accents/espaces) + fautes mineures (distance Levenshtein)
-    const countsByRaw = new Map<string, number>();
-    for (const v of rawValues) countsByRaw.set(v, (countsByRaw.get(v) ?? 0) + 1);
-
-    const uniqueRaw = Array.from(countsByRaw.keys());
-
-    type Cluster = { key: string; items: Array<{ raw: string; norm: string; count: number }> };
-    const clusters: Cluster[] = [];
-
-    const maxDistFor = (s: string) => {
-      if (s.length <= 4) return 0;
-      if (s.length <= 7) return 1;
-      if (s.length <= 12) return 2;
-      return 3;
-    };
-
-    for (const raw of uniqueRaw) {
-      const norm = normalizeLoose(raw);
-      if (!norm) continue;
-
-      let found: Cluster | null = null;
-      for (const c of clusters) {
-        const d = levenshtein(norm, c.key);
-        const maxDist = Math.min(maxDistFor(norm), maxDistFor(c.key));
-        if (d <= maxDist) {
-          found = c;
-          break;
-        }
-      }
-
-      const item = { raw, norm, count: countsByRaw.get(raw) ?? 1 };
-      if (found) found.items.push(item);
-      else clusters.push({ key: norm, items: [item] });
-    }
-
-    const corpsMetiers = clusters
-      .map((c) => {
-        // Canonique: la variante la plus fréquente, à défaut la plus courte
-        const sorted = [...c.items].sort((a, b) => (b.count - a.count) || (a.raw.length - b.raw.length) || a.raw.localeCompare(b.raw));
-        return sorted[0]!.raw;
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    const baseItems = rawValues.map((label) => ({ label, count: 1 }));
+    const merged = mergeSimilarLabelsWithCounts(baseItems);
+    const corpsMetiers = merged.map((x) => x.label);
 
     res.json({ corpsMetiers });
   } catch (error: any) {
