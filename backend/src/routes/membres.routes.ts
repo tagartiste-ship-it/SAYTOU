@@ -200,6 +200,86 @@ const buildScopeWhereForCorpsMetier = async (req: AuthRequest) => {
   return { where } as const;
 };
 
+// Endpoint: membres groupés par section pour la sous-localité (fiche de présence sous-localité)
+router.get('/par-sections', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ error: 'Non authentifié' });
+      return;
+    }
+
+    if (user.role !== 'SOUS_LOCALITE_ADMIN' && user.role !== 'OWNER') {
+      res.status(403).json({ error: 'Accès non autorisé' });
+      return;
+    }
+
+    let sousLocaliteId = user.sousLocaliteId;
+
+    if (user.role === 'OWNER') {
+      sousLocaliteId = String(req.query.sousLocaliteId ?? '').trim() || null;
+      if (!sousLocaliteId) {
+        res.status(400).json({ error: 'sousLocaliteId requis pour OWNER' });
+        return;
+      }
+    }
+
+    if (!sousLocaliteId) {
+      res.status(403).json({ error: 'Sous-localité non définie pour cet utilisateur' });
+      return;
+    }
+
+    const sections = await prisma.section.findMany({
+      where: { sousLocaliteId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+
+    const sectionIds = sections.map((s: any) => s.id);
+    if (!sectionIds.length) {
+      res.json({ sections: [] });
+      return;
+    }
+
+    const membres = await prisma.membre.findMany({
+      where: { sectionId: { in: sectionIds } },
+      select: {
+        id: true,
+        prenom: true,
+        nom: true,
+        genre: true,
+        dateNaissance: true,
+        ageTranche: true,
+        sectionId: true,
+      },
+      orderBy: [{ nom: 'asc' }, { prenom: 'asc' }],
+    });
+
+    const bySectionId = new Map<string, { sectionId: string; sectionName: string; membres: any[]; total: number }>();
+    for (const s of sections) {
+      bySectionId.set((s as any).id, { sectionId: (s as any).id, sectionName: (s as any).name, membres: [], total: 0 });
+    }
+
+    for (const m of membres as any[]) {
+      const bucket = bySectionId.get(m.sectionId);
+      if (!bucket) continue;
+      bucket.membres.push(m);
+      bucket.total += 1;
+    }
+
+    const totalMembres = (membres as any[]).length;
+
+    res.json({
+      sousLocaliteId,
+      totalMembres,
+      sections: Array.from(bySectionId.values()),
+    });
+  } catch (error: any) {
+    console.error('Erreur récupération membres par sections:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 router.get('/corps-metiers-stats', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const scoped = await buildScopeWhereForCorpsMetier(req);
