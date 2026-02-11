@@ -741,9 +741,11 @@ router.get('/instances/me', authorize('SECTION_USER'), async (req: AuthRequest, 
       return;
     }
 
+    // Note: on ne filtre PAS sur isVisible ici car le flag isVisible est utilisé
+    // par repairOrgUnitsForLocalite pour masquer les instances SECTION du point de vue LOCALITE.
+    // Les SECTION_USER doivent toujours voir leurs propres cellules/commissions.
     const instances = await prisma.orgUnitInstance.findMany({
       where: {
-        isVisible: true,
         scopeType: 'SECTION',
         scopeId: user.sectionId,
         ...(kind ? { definition: { kind: kind as any } } : {}),
