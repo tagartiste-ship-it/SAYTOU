@@ -80,11 +80,11 @@ export default function CreateRencontrePage() {
   const [membresPresents, setMembresPresents] = useState<string[]>([]);
   const [membresAbsents, setMembresAbsents] = useState<string[]>([]);
 
-  // Sous-localité: membres groupés par section pour la fiche de présence
-  type SectionMembres = { sectionId: string; sectionName: string; membres: Membre[]; total: number };
+  // Sous-localité / Localité: membres groupés par section pour la fiche de présence
+  type SectionMembres = { sectionId: string; sectionName: string; sousLocaliteName?: string; membres: Membre[]; total: number };
   const [sectionsMembres, setSectionsMembres] = useState<SectionMembres[]>([]);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
-  const isSousLocalite = user?.role === 'SOUS_LOCALITE_ADMIN';
+  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE';
 
   const selectedType = types.find((t) => t.id === formData.typeId);
   const isReunion = Boolean(selectedType?.isReunion);
@@ -245,7 +245,7 @@ export default function CreateRencontrePage() {
       setSections(sectionsRes.data.sections || []);
 
       // Sous-localité: charger les membres groupés par section
-      if (isSousLocalite) {
+      if (isGroupedPresence) {
         try {
           const parSectionsRes = await api.get<{ sections: SectionMembres[] }>('/membres/par-sections');
           const secs = parSectionsRes.data.sections || [];
@@ -884,7 +884,7 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <Users className="w-5 h-5 text-primary-600" />
-                Fiche de présence {isSousLocalite && '(par section)'}
+                Fiche de présence {isGroupedPresence && '(par section)'}
               </h2>
               {membresPresence.length > 0 && (
                 <Button
@@ -898,7 +898,7 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
             </div>
 
           {/* ===== SOUS-LOCALITE: fiche de présence groupée par section ===== */}
-          {isSousLocalite && sectionsMembres.length > 0 ? (
+          {isGroupedPresence && sectionsMembres.length > 0 ? (
             <div className="space-y-4">
               {/* Résumé global */}
               <div className="p-3 bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 rounded-lg">
@@ -1087,7 +1087,7 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
                 </div>
               </div>
             </div>
-          ) : !isSousLocalite && membresPresence.length > 0 ? (
+          ) : !isGroupedPresence && membresPresence.length > 0 ? (
             /* ===== SECTION_USER / LOCALITE: fiche de présence classique par tranche d'âge ===== */
             <div className="space-y-4">
               {(() => {
@@ -1268,7 +1268,7 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <Users className="w-12 h-12 mx-auto mb-2 text-gray-400 dark:text-gray-600" />
               <p className="text-gray-900 dark:text-gray-100">Aucun membre enregistré</p>
-              <p className="text-sm">{isSousLocalite ? 'Aucune section trouvée pour votre sous-localité' : 'Allez dans la page "Membres" pour ajouter des membres à votre section'}</p>
+              <p className="text-sm">{isGroupedPresence ? 'Aucune section trouvée pour votre sous-localité' : 'Allez dans la page "Membres" pour ajouter des membres à votre section'}</p>
             </div>
           )}
           </Card>

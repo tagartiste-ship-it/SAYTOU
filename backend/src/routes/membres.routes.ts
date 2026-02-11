@@ -200,7 +200,7 @@ const buildScopeWhereForCorpsMetier = async (req: AuthRequest) => {
   return { where } as const;
 };
 
-// Endpoint: membres groupés par section pour la sous-localité (fiche de présence sous-localité)
+// Endpoint: membres groupés par section (fiche de présence sous-localité / localité)
 router.get('/par-sections', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user;
@@ -209,35 +209,53 @@ router.get('/par-sections', authenticate, async (req: AuthRequest, res: Response
       return;
     }
 
-    if (user.role !== 'SOUS_LOCALITE_ADMIN' && user.role !== 'OWNER') {
+    if (user.role !== 'SOUS_LOCALITE_ADMIN' && user.role !== 'LOCALITE' && user.role !== 'OWNER') {
       res.status(403).json({ error: 'Accès non autorisé' });
       return;
     }
 
-    let sousLocaliteId = user.sousLocaliteId;
+    let sectionsWhere: any = {};
 
-    if (user.role === 'OWNER') {
-      sousLocaliteId = String(req.query.sousLocaliteId ?? '').trim() || null;
-      if (!sousLocaliteId) {
-        res.status(400).json({ error: 'sousLocaliteId requis pour OWNER' });
+    if (user.role === 'SOUS_LOCALITE_ADMIN') {
+      if (!user.sousLocaliteId) {
+        res.status(403).json({ error: 'Sous-localité non définie pour cet utilisateur' });
+        return;
+      }
+      sectionsWhere = { sousLocaliteId: user.sousLocaliteId };
+    } else if (user.role === 'LOCALITE') {
+      // Trouver la localité de l'utilisateur
+      const actor = await prisma.user.findUnique({
+        where: { id: user.userId },
+        select: { localiteId: true },
+      });
+      const localiteId = actor?.localiteId ?? (user as any).localiteId ?? null;
+      if (!localiteId) {
+        res.status(403).json({ error: 'Localité non définie pour cet utilisateur' });
+        return;
+      }
+      sectionsWhere = { sousLocalite: { localiteId } };
+    } else if (user.role === 'OWNER') {
+      const sousLocaliteId = String(req.query.sousLocaliteId ?? '').trim();
+      const localiteId = String(req.query.localiteId ?? '').trim();
+      if (sousLocaliteId) {
+        sectionsWhere = { sousLocaliteId };
+      } else if (localiteId) {
+        sectionsWhere = { sousLocalite: { localiteId } };
+      } else {
+        res.status(400).json({ error: 'sousLocaliteId ou localiteId requis pour OWNER' });
         return;
       }
     }
 
-    if (!sousLocaliteId) {
-      res.status(403).json({ error: 'Sous-localité non définie pour cet utilisateur' });
-      return;
-    }
-
     const sections = await prisma.section.findMany({
-      where: { sousLocaliteId },
-      select: { id: true, name: true },
+      where: sectionsWhere,
+      select: { id: true, name: true, sousLocalite: { select: { id: true, name: true } } },
       orderBy: { name: 'asc' },
     });
 
     const sectionIds = sections.map((s: any) => s.id);
     if (!sectionIds.length) {
-      res.json({ sections: [] });
+      res.json({ sections: [], totalMembres: 0 });
       return;
     }
 
@@ -255,9 +273,9 @@ router.get('/par-sections', authenticate, async (req: AuthRequest, res: Response
       orderBy: [{ nom: 'asc' }, { prenom: 'asc' }],
     });
 
-    const bySectionId = new Map<string, { sectionId: string; sectionName: string; membres: any[]; total: number }>();
-    for (const s of sections) {
-      bySectionId.set((s as any).id, { sectionId: (s as any).id, sectionName: (s as any).name, membres: [], total: 0 });
+    const bySectionId = new Map<string, { sectionId: string; sectionName: string; sousLocaliteName?: string; membres: any[]; total: number }>();
+    for (const s of sections as any[]) {
+      bySectionId.set(s.id, { sectionId: s.id, sectionName: s.name, sousLocaliteName: s.sousLocalite?.name, membres: [], total: 0 });
     }
 
     for (const m of membres as any[]) {
@@ -270,7 +288,6 @@ router.get('/par-sections', authenticate, async (req: AuthRequest, res: Response
     const totalMembres = (membres as any[]).length;
 
     res.json({
-      sousLocaliteId,
       totalMembres,
       sections: Array.from(bySectionId.values()),
     });

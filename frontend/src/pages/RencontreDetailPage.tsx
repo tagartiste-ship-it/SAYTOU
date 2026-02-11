@@ -1,28 +1,49 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Download, Calendar, Clock, Users, FileText, User, MapPin } from 'lucide-react';
+import { ArrowLeft, Download, Calendar, Clock, Users, FileText, User, MapPin, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
-import type { Rencontre } from '../lib/types';
+import type { Rencontre, Membre } from '../lib/types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { useAuthStore } from '../store/authStore';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
 
+type SectionMembres = { sectionId: string; sectionName: string; membres: Membre[]; total: number };
+
 export default function RencontreDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [rencontre, setRencontre] = useState<Rencontre | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [sectionsMembres, setSectionsMembres] = useState<SectionMembres[]>([]);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE';
 
   useEffect(() => {
     if (id) {
       fetchRencontre();
     }
+    if (isGroupedPresence) {
+      fetchSectionsMembres();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const fetchSectionsMembres = async () => {
+    try {
+      const res = await api.get<{ sections: SectionMembres[] }>('/membres/par-sections');
+      const secs = res.data.sections || [];
+      setSectionsMembres(secs);
+      setExpandedSections(new Set(secs.map((s) => s.sectionId)));
+    } catch {
+      setSectionsMembres([]);
+    }
+  };
 
   const fetchRencontre = async () => {
     try {
@@ -268,9 +289,102 @@ export default function RencontreDetailPage() {
                 <p className="text-4xl font-bold text-primary-600 dark:text-primary-400">{rencontre.presenceTotale}</p>
               </div>
             </div>
-          </div>
 
-          {/* Note: La liste détaillée des membres nécessiterait une requête supplémentaire pour récupérer les données complètes */}
+            {/* Détail par section pour sous-localité / localité */}
+            {isGroupedPresence && sectionsMembres.length > 0 && rencontre.membresPresents && (
+              <div className="mt-6 space-y-3">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Détail par section</h4>
+
+                <div className="flex gap-2 print:hidden">
+                  <Button type="button" variant="outline" className="text-xs" onClick={() => setExpandedSections(new Set(sectionsMembres.map((s) => s.sectionId)))}>Tout ouvrir</Button>
+                  <Button type="button" variant="outline" className="text-xs" onClick={() => setExpandedSections(new Set())}>Tout fermer</Button>
+                </div>
+
+                {(() => {
+                  const presentsSet = new Set(rencontre.membresPresents || []);
+                  return sectionsMembres.map((sec) => {
+                    const isExpanded = expandedSections.has(sec.sectionId);
+                    const sectionPresents = sec.membres.filter((m) => presentsSet.has(m.id));
+                    const sectionAbsents = sec.membres.filter((m) => !presentsSet.has(m.id));
+                    const presentH = sectionPresents.filter((m) => m.genre === 'HOMME').length;
+                    const presentF = sectionPresents.filter((m) => m.genre !== 'HOMME').length;
+
+                    const toggleSection = () => {
+                      setExpandedSections((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(sec.sectionId)) next.delete(sec.sectionId);
+                        else next.add(sec.sectionId);
+                        return next;
+                      });
+                    };
+
+                    return (
+                      <div key={sec.sectionId} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
+                        <button type="button" onClick={toggleSection} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors print:hover:bg-gray-50">
+                          <div className="flex items-center gap-2">
+                            {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-500 print:hidden" /> : <ChevronRight className="w-5 h-5 text-gray-500 print:hidden" />}
+                            <span className="text-base font-semibold text-gray-900 dark:text-gray-100">{sec.sectionName}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="default">{sec.total} mbr</Badge>
+                            <Badge variant="secondary" className={sectionPresents.length > 0 ? 'bg-green-600 text-white' : ''}>{sectionPresents.length} P</Badge>
+                            <Badge variant="secondary">H: {presentH}</Badge>
+                            <Badge variant="accent">F: {presentF}</Badge>
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="p-4 space-y-3">
+                            {sectionPresents.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">Présents ({sectionPresents.length})</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {sectionPresents.map((m) => (
+                                    <span key={m.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-700">
+                                      {m.prenom} {m.nom}
+                                      {m.genre === 'HOMME' && <span className="ml-1 text-blue-600">H</span>}
+                                      {m.genre === 'FEMME' && <span className="ml-1 text-pink-600">F</span>}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {sectionAbsents.length > 0 && (
+                              <div>
+                                <p className="text-xs font-semibold text-orange-700 dark:text-orange-400 mb-1">Absents ({sectionAbsents.length})</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {sectionAbsents.map((m) => (
+                                    <span key={m.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border border-orange-200 dark:border-orange-700">
+                                      {m.prenom} {m.nom}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+
+                {/* Résumé par section */}
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">Résumé par section :</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    {sectionsMembres.map((sec) => {
+                      const count = sec.membres.filter((m) => (rencontre.membresPresents || []).includes(m.id)).length;
+                      return (
+                        <div key={sec.sectionId} className="flex justify-between text-xs text-blue-800 dark:text-blue-200">
+                          <span>{sec.sectionName}</span>
+                          <span className="font-semibold">{count}/{sec.total}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Observations */}
           {rencontre.observations && (
