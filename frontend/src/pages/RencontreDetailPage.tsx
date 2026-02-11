@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Download, Calendar, Clock, Users, FileText, User, MapPin, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Download, Calendar, Clock, Users, FileText, User, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
-import type { Rencontre, Membre } from '../lib/types';
+import type { Rencontre } from '../lib/types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useAuthStore } from '../store/authStore';
@@ -12,7 +12,7 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
 
-type SectionMembres = { sectionId: string; sectionName: string; membres: Membre[]; total: number };
+type SectionPresenceItem = { sectionId: string; sectionName: string; hommes: number; femmes: number; total: number };
 
 export default function RencontreDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -20,30 +20,14 @@ export default function RencontreDetailPage() {
   const { user } = useAuthStore();
   const [rencontre, setRencontre] = useState<Rencontre | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [sectionsMembres, setSectionsMembres] = useState<SectionMembres[]>([]);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE';
 
   useEffect(() => {
     if (id) {
       fetchRencontre();
     }
-    if (isGroupedPresence) {
-      fetchSectionsMembres();
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
-
-  const fetchSectionsMembres = async () => {
-    try {
-      const res = await api.get<{ sections: SectionMembres[] }>('/membres/par-sections');
-      const secs = res.data.sections || [];
-      setSectionsMembres(secs);
-      setExpandedSections(new Set(secs.map((s) => s.sectionId)));
-    } catch {
-      setSectionsMembres([]);
-    }
-  };
 
   const fetchRencontre = async () => {
     try {
@@ -291,96 +275,43 @@ export default function RencontreDetailPage() {
             </div>
 
             {/* Détail par section pour sous-localité / localité */}
-            {isGroupedPresence && sectionsMembres.length > 0 && rencontre.membresPresents && (
-              <div className="mt-6 space-y-3">
-                <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100">Détail par section</h4>
-
-                <div className="flex gap-2 print:hidden">
-                  <Button type="button" variant="outline" className="text-xs" onClick={() => setExpandedSections(new Set(sectionsMembres.map((s) => s.sectionId)))}>Tout ouvrir</Button>
-                  <Button type="button" variant="outline" className="text-xs" onClick={() => setExpandedSections(new Set())}>Tout fermer</Button>
-                </div>
-
-                {(() => {
-                  const presentsSet = new Set(rencontre.membresPresents || []);
-                  return sectionsMembres.map((sec) => {
-                    const isExpanded = expandedSections.has(sec.sectionId);
-                    const sectionPresents = sec.membres.filter((m) => presentsSet.has(m.id));
-                    const sectionAbsents = sec.membres.filter((m) => !presentsSet.has(m.id));
-                    const presentH = sectionPresents.filter((m) => m.genre === 'HOMME').length;
-                    const presentF = sectionPresents.filter((m) => m.genre !== 'HOMME').length;
-
-                    const toggleSection = () => {
-                      setExpandedSections((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(sec.sectionId)) next.delete(sec.sectionId);
-                        else next.add(sec.sectionId);
-                        return next;
-                      });
-                    };
-
-                    return (
-                      <div key={sec.sectionId} className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden">
-                        <button type="button" onClick={toggleSection} className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors print:hover:bg-gray-50">
-                          <div className="flex items-center gap-2">
-                            {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-500 print:hidden" /> : <ChevronRight className="w-5 h-5 text-gray-500 print:hidden" />}
-                            <span className="text-base font-semibold text-gray-900 dark:text-gray-100">{sec.sectionName}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="default">{sec.total} mbr</Badge>
-                            <Badge variant="secondary" className={sectionPresents.length > 0 ? 'bg-green-600 text-white' : ''}>{sectionPresents.length} P</Badge>
-                            <Badge variant="secondary">H: {presentH}</Badge>
-                            <Badge variant="accent">F: {presentF}</Badge>
-                          </div>
-                        </button>
-                        {isExpanded && (
-                          <div className="p-4 space-y-3">
-                            {sectionPresents.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-1">Présents ({sectionPresents.length})</p>
-                                <div className="flex flex-wrap gap-1">
-                                  {sectionPresents.map((m) => (
-                                    <span key={m.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-700">
-                                      {m.prenom} {m.nom}
-                                      {m.genre === 'HOMME' && <span className="ml-1 text-blue-600">H</span>}
-                                      {m.genre === 'FEMME' && <span className="ml-1 text-pink-600">F</span>}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            {sectionAbsents.length > 0 && (
-                              <div>
-                                <p className="text-xs font-semibold text-orange-700 dark:text-orange-400 mb-1">Absents ({sectionAbsents.length})</p>
-                                <div className="flex flex-wrap gap-1">
-                                  {sectionAbsents.map((m) => (
-                                    <span key={m.id} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200 border border-orange-200 dark:border-orange-700">
-                                      {m.prenom} {m.nom}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
-                })()}
-
-                {/* Résumé par section */}
-                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">Résumé par section :</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                    {sectionsMembres.map((sec) => {
-                      const count = sec.membres.filter((m) => (rencontre.membresPresents || []).includes(m.id)).length;
-                      return (
-                        <div key={sec.sectionId} className="flex justify-between text-xs text-blue-800 dark:text-blue-200">
-                          <span>{sec.sectionName}</span>
-                          <span className="font-semibold">{count}/{sec.total}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+            {isGroupedPresence && rencontre.membresPresents && Array.isArray(rencontre.membresPresents) && rencontre.membresPresents.length > 0 && typeof rencontre.membresPresents[0] === 'object' && 'sectionId' in (rencontre.membresPresents[0] as any) && (
+              <div className="mt-6">
+                <h4 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">Détail par section</h4>
+                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                        <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-300">Section</th>
+                        <th className="text-center px-3 py-3 font-semibold text-blue-700 dark:text-blue-300 w-24">Hommes</th>
+                        <th className="text-center px-3 py-3 font-semibold text-pink-700 dark:text-pink-300 w-24">Femmes</th>
+                        <th className="text-center px-3 py-3 font-semibold text-gray-700 dark:text-gray-300 w-24">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(rencontre.membresPresents as unknown as SectionPresenceItem[]).map((item, idx) => (
+                        <tr
+                          key={item.sectionId}
+                          className={`border-b border-gray-100 dark:border-gray-800 ${idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/50 dark:bg-gray-800/50'} ${item.total > 0 ? 'ring-1 ring-inset ring-green-200 dark:ring-green-800' : ''}`}
+                        >
+                          <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{item.sectionName}</td>
+                          <td className="px-3 py-3 text-center font-semibold text-blue-700 dark:text-blue-300">{item.hommes}</td>
+                          <td className="px-3 py-3 text-center font-semibold text-pink-700 dark:text-pink-300">{item.femmes}</td>
+                          <td className="px-3 py-3 text-center">
+                            <span className={`font-bold ${item.total > 0 ? 'text-green-700 dark:text-green-400' : 'text-gray-400'}`}>{item.total}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gradient-to-r from-primary-50 to-blue-50 dark:from-primary-900/20 dark:to-blue-900/20 border-t-2 border-primary-200 dark:border-primary-700">
+                        <td className="px-4 py-3 font-bold text-gray-900 dark:text-gray-100">TOTAL</td>
+                        <td className="px-3 py-3 text-center font-bold text-blue-700 dark:text-blue-300 text-lg">{rencontre.presenceHomme}</td>
+                        <td className="px-3 py-3 text-center font-bold text-pink-700 dark:text-pink-300 text-lg">{rencontre.presenceFemme}</td>
+                        <td className="px-3 py-3 text-center font-bold text-primary-700 dark:text-primary-300 text-lg">{rencontre.presenceTotale}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
             )}

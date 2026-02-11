@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, Trash2, Save, Users, Calendar, FileText, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Users, Calendar, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
 import type { RencontreType, Section, OrdreDuJourItem, Membre } from '../lib/types';
@@ -80,10 +80,10 @@ export default function CreateRencontrePage() {
   const [membresPresents, setMembresPresents] = useState<string[]>([]);
   const [membresAbsents, setMembresAbsents] = useState<string[]>([]);
 
-  // Sous-localité / Localité: membres groupés par section pour la fiche de présence
-  type SectionMembres = { sectionId: string; sectionName: string; sousLocaliteName?: string; membres: Membre[]; total: number };
-  const [sectionsMembres, setSectionsMembres] = useState<SectionMembres[]>([]);
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  // Sous-localité / Localité: sections pour la fiche de présence groupée
+  type SectionInfo = { sectionId: string; sectionName: string; sousLocaliteName?: string; total: number };
+  const [sectionsInfo, setSectionsInfo] = useState<SectionInfo[]>([]);
+  const [sectionPresenceCounts, setSectionPresenceCounts] = useState<Record<string, { hommes: number; femmes: number }>>({}); 
   const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE';
 
   const selectedType = types.find((t) => t.id === formData.typeId);
@@ -181,17 +181,29 @@ export default function CreateRencontrePage() {
   }, [draftKey, formData, ordreDuJour, membresPresents, hasRestoredDraft]);
 
   useEffect(() => {
-    if (!membresPresence.length) return;
-
-    const presents = new Set(membresPresents);
-    const presenceHomme = membresPresence.filter((m) => presents.has(m.id) && m.genre === 'HOMME').length;
-    const presenceFemme = membresPresence.filter((m) => presents.has(m.id) && m.genre === 'FEMME').length;
-
-    setFormData((prev) => {
-      if (prev.presenceHomme === presenceHomme && prev.presenceFemme === presenceFemme) return prev;
-      return { ...prev, presenceHomme, presenceFemme };
-    });
-  }, [membresPresence, membresPresents]);
+    if (isGroupedPresence) {
+      // Somme des saisies H/F par section
+      let totalH = 0;
+      let totalF = 0;
+      for (const c of Object.values(sectionPresenceCounts)) {
+        totalH += c.hommes || 0;
+        totalF += c.femmes || 0;
+      }
+      setFormData((prev) => {
+        if (prev.presenceHomme === totalH && prev.presenceFemme === totalF) return prev;
+        return { ...prev, presenceHomme: totalH, presenceFemme: totalF };
+      });
+    } else {
+      if (!membresPresence.length) return;
+      const presents = new Set(membresPresents);
+      const presenceHomme = membresPresence.filter((m) => presents.has(m.id) && m.genre === 'HOMME').length;
+      const presenceFemme = membresPresence.filter((m) => presents.has(m.id) && m.genre === 'FEMME').length;
+      setFormData((prev) => {
+        if (prev.presenceHomme === presenceHomme && prev.presenceFemme === presenceFemme) return prev;
+        return { ...prev, presenceHomme, presenceFemme };
+      });
+    }
+  }, [membresPresence, membresPresents, sectionPresenceCounts, isGroupedPresence]);
 
   useEffect(() => {
     if (!hasRestoredDraft) return;
@@ -244,20 +256,23 @@ export default function CreateRencontrePage() {
       const sectionsRes = await api.get<{ sections: Section[] }>('/sections');
       setSections(sectionsRes.data.sections || []);
 
-      // Sous-localité: charger les membres groupés par section
+      // Sous-localité / Localité: charger les sections pour la fiche de présence
       if (isGroupedPresence) {
         try {
-          const parSectionsRes = await api.get<{ sections: SectionMembres[] }>('/membres/par-sections');
-          const secs = parSectionsRes.data.sections || [];
-          setSectionsMembres(secs);
-          // Aplatir tous les membres pour membresPresence (calcul présences H/F)
-          const allMembres = secs.flatMap((s) => s.membres);
-          setMembresPresence(allMembres);
-          setMembres(allMembres);
-          // Ouvrir toutes les sections par défaut
-          setExpandedSections(new Set(secs.map((s) => s.sectionId)));
+          const parSectionsRes = await api.get<{ sections: Array<{ sectionId: string; sectionName: string; sousLocaliteName?: string; total: number }> }>('/membres/par-sections');
+          const secs = (parSectionsRes.data.sections || []).map((s) => ({
+            sectionId: s.sectionId,
+            sectionName: s.sectionName,
+            sousLocaliteName: s.sousLocaliteName,
+            total: s.total,
+          }));
+          setSectionsInfo(secs);
+          // Initialiser les compteurs à 0 pour chaque section
+          const counts: Record<string, { hommes: number; femmes: number }> = {};
+          for (const s of secs) counts[s.sectionId] = { hommes: 0, femmes: 0 };
+          setSectionPresenceCounts(counts);
         } catch {
-          setSectionsMembres([]);
+          setSectionsInfo([]);
         }
       } else {
         // Charger les membres (section user: sa section; admin: section sélectionnée)
@@ -423,7 +438,15 @@ export default function CreateRencontrePage() {
         presenceFemme: Number(formData.presenceFemme),
         presenceTotale: Number(formData.presenceHomme) + Number(formData.presenceFemme),
         ordreDuJour: isReunion ? ordreDuJour.filter(item => item.titre.trim() !== '') : [],
-        membresPresents,
+        membresPresents: isGroupedPresence
+          ? sectionsInfo.map((s) => ({
+              sectionId: s.sectionId,
+              sectionName: s.sectionName,
+              hommes: sectionPresenceCounts[s.sectionId]?.hommes || 0,
+              femmes: sectionPresenceCounts[s.sectionId]?.femmes || 0,
+              total: (sectionPresenceCounts[s.sectionId]?.hommes || 0) + (sectionPresenceCounts[s.sectionId]?.femmes || 0),
+            }))
+          : membresPresents,
         lieuMembreId: formData.lieuMembreId || null,
         lieuTexte: lieuTexteFinal,
         observations: formData.observations,
@@ -886,7 +909,7 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
                 <Users className="w-5 h-5 text-primary-600" />
                 Fiche de présence {isGroupedPresence && '(par section)'}
               </h2>
-              {membresPresence.length > 0 && (
+              {!isGroupedPresence && membresPresence.length > 0 && (
                 <Button
                   type="button"
                   onClick={handleToggleAll}
@@ -897,194 +920,84 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
               )}
             </div>
 
-          {/* ===== SOUS-LOCALITE: fiche de présence groupée par section ===== */}
-          {isGroupedPresence && sectionsMembres.length > 0 ? (
+          {/* ===== SOUS-LOCALITE / LOCALITE: tableau compact par section ===== */}
+          {isGroupedPresence && sectionsInfo.length > 0 ? (
             <div className="space-y-4">
-              {/* Résumé global */}
-              <div className="p-3 bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 rounded-lg">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Badge variant="default" className="text-sm px-3 py-1">
-                    {sectionsMembres.length} section{sectionsMembres.length > 1 ? 's' : ''}
-                  </Badge>
-                  <Badge variant="secondary" className="text-sm px-3 py-1">
-                    {membresPresence.length} membres au total
-                  </Badge>
-                  <Badge variant="default" className="text-sm px-3 py-1 bg-green-600">
-                    {membresPresents.length} présent{membresPresents.length > 1 ? 's' : ''}
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Boutons ouvrir/fermer toutes les sections */}
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="text-xs"
-                  onClick={() => setExpandedSections(new Set(sectionsMembres.map((s) => s.sectionId)))}
-                >
-                  Tout ouvrir
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="text-xs"
-                  onClick={() => setExpandedSections(new Set())}
-                >
-                  Tout fermer
-                </Button>
-              </div>
-
-              {sectionsMembres.map((sec) => {
-                const isExpanded = expandedSections.has(sec.sectionId);
-                const presentsSet = new Set(membresPresents);
-                const sectionPresents = sec.membres.filter((m) => presentsSet.has(m.id)).length;
-                const sectionHommes = sec.membres.filter((m) => m.genre === 'HOMME');
-                const sectionFemmes = sec.membres.filter((m) => m.genre !== 'HOMME');
-                const presentH = sectionHommes.filter((m) => presentsSet.has(m.id)).length;
-                const presentF = sectionFemmes.filter((m) => presentsSet.has(m.id)).length;
-
-                const toggleSection = () => {
-                  setExpandedSections((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(sec.sectionId)) next.delete(sec.sectionId);
-                    else next.add(sec.sectionId);
-                    return next;
-                  });
-                };
-
-                const toggleAllInSection = () => {
-                  const ids = sec.membres.map((m) => m.id);
-                  const allPresent = ids.every((id) => presentsSet.has(id));
-                  if (allPresent) {
-                    setMembresPresents((prev) => prev.filter((id) => !ids.includes(id)));
-                  } else {
-                    setMembresPresents((prev) => {
-                      const s = new Set(prev);
-                      for (const id of ids) s.add(id);
-                      return Array.from(s);
-                    });
-                  }
-                  setMembresAbsents((prev) => prev.filter((id) => !ids.includes(id)));
-                };
-
-                return (
-                  <div
-                    key={sec.sectionId}
-                    className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 overflow-hidden"
-                  >
-                    {/* Section header - clickable */}
-                    <button
-                      type="button"
-                      onClick={toggleSection}
-                      className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        {isExpanded ? <ChevronDown className="w-5 h-5 text-gray-500" /> : <ChevronRight className="w-5 h-5 text-gray-500" />}
-                        <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">{sec.sectionName}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="default">{sec.total} mbr</Badge>
-                        <Badge variant="secondary" className={sectionPresents > 0 ? 'bg-green-600 text-white' : ''}>
-                          {sectionPresents} P
-                        </Badge>
-                        <Badge variant="secondary">H: {presentH}</Badge>
-                        <Badge variant="accent">F: {presentF}</Badge>
-                      </div>
-                    </button>
-
-                    {/* Section body - expandable */}
-                    {isExpanded && (
-                      <div className="p-4 space-y-3">
-                        <div className="flex justify-end">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="text-xs"
-                            onClick={(e) => { e.stopPropagation(); toggleAllInSection(); }}
-                          >
-                            {sec.membres.every((m) => presentsSet.has(m.id)) ? 'Décocher section' : 'Cocher toute la section'}
-                          </Button>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                          {sec.membres.map((membre) => {
-                            const isPresent = membresPresents.includes(membre.id);
-                            const isAbsent = membresAbsents.includes(membre.id);
-                            return (
-                              <div
-                                key={membre.id}
-                                className={`p-2 border rounded-lg transition-colors ${
-                                  isPresent
-                                    ? 'border-green-300 dark:border-green-700 bg-green-50 dark:bg-green-900/20'
-                                    : isAbsent
-                                      ? 'border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20'
-                                      : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
-                                }`}
-                              >
-                                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-normal break-words leading-snug">
-                                  {membre.prenom} {membre.nom}
-                                  {membre.genre === 'HOMME' && <span className="ml-1 text-xs text-blue-600">H</span>}
-                                  {membre.genre === 'FEMME' && <span className="ml-1 text-xs text-pink-600">F</span>}
-                                </p>
-                                <div className="mt-2 flex items-center gap-3">
-                                  <label className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 font-semibold select-none" onMouseDown={(e) => e.preventDefault()}>
-                                    <input type="checkbox" checked={isPresent} onChange={() => handleTogglePresent(membre.id)} className="sr-only peer" aria-label="Présent" />
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded border-2 border-green-600 bg-transparent text-transparent peer-checked:bg-green-600 peer-checked:border-green-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-green-500 text-xs font-bold leading-none">✓</span>
-                                    P
-                                  </label>
-                                  <label className="flex items-center gap-1 text-xs text-gray-700 dark:text-gray-300 font-semibold select-none" onMouseDown={(e) => e.preventDefault()}>
-                                    <input type="checkbox" checked={isAbsent} onChange={() => handleToggleAbsent(membre.id)} className="sr-only peer" aria-label="Absent" />
-                                    <span className="inline-flex items-center justify-center w-4 h-4 rounded border-2 border-orange-600 bg-transparent text-transparent peer-checked:bg-orange-600 peer-checked:border-orange-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-orange-500 text-xs font-bold leading-none">✓</span>
-                                    A
-                                  </label>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Résumé global en bas */}
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                  <div>
-                    <span className="text-blue-700 dark:text-blue-300 font-medium">Total présents</span>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{membresPresents.length}</p>
-                  </div>
-                  <div>
-                    <span className="text-blue-700 dark:text-blue-300 font-medium">Total membres</span>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{membresPresence.length}</p>
-                  </div>
-                  <div>
-                    <span className="text-blue-700 dark:text-blue-300 font-medium">Hommes</span>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{formData.presenceHomme}</p>
-                  </div>
-                  <div>
-                    <span className="text-blue-700 dark:text-blue-300 font-medium">Femmes</span>
-                    <p className="text-2xl font-bold text-blue-900 dark:text-blue-100">{formData.presenceFemme}</p>
-                  </div>
-                </div>
-                {/* Détail par section */}
-                <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
-                  <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">Détail par section :</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                    {sectionsMembres.map((sec) => {
-                      const presentsSet = new Set(membresPresents);
-                      const count = sec.membres.filter((m) => presentsSet.has(m.id)).length;
+              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                      <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-300">Section</th>
+                      <th className="text-center px-3 py-3 font-semibold text-blue-700 dark:text-blue-300 w-24">Hommes</th>
+                      <th className="text-center px-3 py-3 font-semibold text-pink-700 dark:text-pink-300 w-24">Femmes</th>
+                      <th className="text-center px-3 py-3 font-semibold text-gray-700 dark:text-gray-300 w-24">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sectionsInfo.map((sec, idx) => {
+                      const counts = sectionPresenceCounts[sec.sectionId] || { hommes: 0, femmes: 0 };
+                      const sectionTotal = (counts.hommes || 0) + (counts.femmes || 0);
+                      const updateCount = (field: 'hommes' | 'femmes', value: number) => {
+                        setSectionPresenceCounts((prev) => ({
+                          ...prev,
+                          [sec.sectionId]: { ...prev[sec.sectionId], [field]: Math.max(0, value) },
+                        }));
+                      };
                       return (
-                        <div key={sec.sectionId} className="flex justify-between text-xs text-blue-800 dark:text-blue-200">
-                          <span>{sec.sectionName}</span>
-                          <span className="font-semibold">{count}/{sec.total}</span>
-                        </div>
+                        <tr
+                          key={sec.sectionId}
+                          className={`border-b border-gray-100 dark:border-gray-800 ${idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/50 dark:bg-gray-800/50'} ${sectionTotal > 0 ? 'ring-1 ring-inset ring-green-200 dark:ring-green-800' : ''}`}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-gray-900 dark:text-gray-100">{sec.sectionName}</span>
+                              <Badge variant="secondary" className="text-xs">{sec.total} mbr</Badge>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              value={counts.hommes || ''}
+                              placeholder="0"
+                              onChange={(e) => updateCount('hommes', parseInt(e.target.value) || 0)}
+                              className="w-20 mx-auto h-9 rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/20 px-2 py-1 text-center text-sm font-semibold text-blue-800 dark:text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              value={counts.femmes || ''}
+                              placeholder="0"
+                              onChange={(e) => updateCount('femmes', parseInt(e.target.value) || 0)}
+                              className="w-20 mx-auto h-9 rounded-lg border border-pink-300 dark:border-pink-700 bg-pink-50/50 dark:bg-pink-900/20 px-2 py-1 text-center text-sm font-semibold text-pink-800 dark:text-pink-200 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                            />
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span className={`text-base font-bold ${sectionTotal > 0 ? 'text-green-700 dark:text-green-400' : 'text-gray-400 dark:text-gray-600'}`}>
+                              {sectionTotal}
+                            </span>
+                          </td>
+                        </tr>
                       );
                     })}
-                  </div>
-                </div>
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gradient-to-r from-primary-50 to-blue-50 dark:from-primary-900/20 dark:to-blue-900/20 border-t-2 border-primary-200 dark:border-primary-700">
+                      <td className="px-4 py-3 font-bold text-gray-900 dark:text-gray-100">TOTAL</td>
+                      <td className="px-3 py-3 text-center font-bold text-blue-700 dark:text-blue-300 text-lg">{formData.presenceHomme}</td>
+                      <td className="px-3 py-3 text-center font-bold text-pink-700 dark:text-pink-300 text-lg">{formData.presenceFemme}</td>
+                      <td className="px-3 py-3 text-center font-bold text-primary-700 dark:text-primary-300 text-lg">{Number(formData.presenceHomme) + Number(formData.presenceFemme)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <Badge variant="default" className="text-xs">{sectionsInfo.length} section{sectionsInfo.length > 1 ? 's' : ''}</Badge>
+                <span>•</span>
+                <span>Saisissez le nombre d'hommes et de femmes présents pour chaque section</span>
               </div>
             </div>
           ) : !isGroupedPresence && membresPresence.length > 0 ? (
