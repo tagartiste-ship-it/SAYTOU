@@ -94,6 +94,22 @@ const PORT = config.port;
 
 app.listen(PORT, () => {
   startBinomesAutoRotationJob();
+
+  // Keep-alive: self-ping toutes les 10 min pour éviter le cold start Render free tier
+  if (config.nodeEnv === 'production') {
+    const KEEP_ALIVE_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+    const selfUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+    setInterval(async () => {
+      try {
+        const res = await fetch(`${selfUrl}/health`);
+        console.log(`[keep-alive] ping ${selfUrl}/health → ${res.status}`);
+      } catch (err: any) {
+        console.warn(`[keep-alive] ping failed:`, err?.message);
+      }
+    }, KEEP_ALIVE_INTERVAL_MS);
+    console.log(`🏓 Keep-alive activé: ping ${selfUrl}/health toutes les 10 min`);
+  }
+
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
