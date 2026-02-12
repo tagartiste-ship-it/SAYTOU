@@ -19,7 +19,7 @@ export default function DashboardPage() {
 
   const fetchStats = async () => {
     try {
-      if (user?.role === 'OWNER' || user?.role === 'LOCALITE') {
+      if (user?.role === 'OWNER' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE') {
         const response = await api.get('/stats/global');
         setStats(response.data.statistiques);
       } else if (user?.role === 'SOUS_LOCALITE_ADMIN' && user.sousLocaliteId) {
@@ -248,6 +248,7 @@ export default function DashboardPage() {
               <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Rôle</p>
               <p className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                 {user?.role === 'LOCALITE' && 'Super Admin (LOCALITÉ)'}
+                {user?.role === 'COMITE_PEDAGOGIQUE' && 'Comité Pédagogique'}
                 {user?.role === 'SOUS_LOCALITE_ADMIN' && 'Admin Sous-Localité'}
                 {user?.role === 'SECTION_USER' && 'Utilisateur Section'}
                 {user?.role === 'ORG_UNIT_RESP' && 'Resp Cellule/Commission'}
@@ -296,7 +297,7 @@ export default function DashboardPage() {
                 )}
                 
                 {/* Message pour LOCALITE */}
-                {user?.role === 'LOCALITE' && !user?.sousLocalite && !user?.section && (
+                {(user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE') && !user?.sousLocalite && !user?.section && (
                   <div className="text-center py-2 mt-2 border-t border-primary-200 dark:border-primary-800">
                     <p className="text-sm font-medium text-primary-700 dark:text-primary-400">
                       Accès à toutes les sous-localités et sections

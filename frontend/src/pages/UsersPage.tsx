@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { KeyRound, Search, ShieldCheck, UserCog } from 'lucide-react';
+import { KeyRound, Plus, Search, ShieldCheck, UserCog } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
 import type { User, UserRole } from '../lib/types';
@@ -57,12 +57,74 @@ export default function UsersPage() {
   const [selectedResponsableId, setSelectedResponsableId] = useState('');
   const [selectedInstanceId, setSelectedInstanceId] = useState('');
 
-  const canView = user?.role === 'OWNER' || user?.role === 'LOCALITE' || user?.role === 'SOUS_LOCALITE_ADMIN';
+  // Création de comptes COMITE_PEDAGOGIQUE / SOUS_LOCALITE_ADMIN
+  const [newAccountName, setNewAccountName] = useState('');
+  const [newAccountEmail, setNewAccountEmail] = useState('');
+  const [newAccountRole, setNewAccountRole] = useState<'COMITE_PEDAGOGIQUE' | 'SOUS_LOCALITE_ADMIN'>('COMITE_PEDAGOGIQUE');
+  const [sousLocalites, setSousLocalites] = useState<{ id: string; name: string }[]>([]);
+  const [selectedSousLocaliteId, setSelectedSousLocaliteId] = useState('');
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+
+  const canView = user?.role === 'OWNER' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE' || user?.role === 'SOUS_LOCALITE_ADMIN';
 
   const isLocked = (u: User) => {
     if (!u.lockedUntil) return false;
     const t = new Date(u.lockedUntil).getTime();
     return Number.isFinite(t) && t > Date.now();
+  };
+
+  const fetchSousLocalites = async () => {
+    if (!isLocalite) return;
+    try {
+      const res = await api.get<{ sousLocalites: { id: string; name: string }[] }>('/sous-localites');
+      setSousLocalites(res.data.sousLocalites || []);
+    } catch {
+      setSousLocalites([]);
+    }
+  };
+
+  const createAccount = async () => {
+    if (!isLocalite) return;
+    const email = newAccountEmail.trim().toLowerCase();
+    const name = newAccountName.trim();
+    if (!email || !email.includes('@')) {
+      toast.error('Email invalide');
+      return;
+    }
+    if (!name) {
+      toast.error('Nom requis');
+      return;
+    }
+    if (newAccountRole === 'SOUS_LOCALITE_ADMIN' && !selectedSousLocaliteId) {
+      toast.error('Veuillez sélectionner une sous-localité');
+      return;
+    }
+
+    setIsCreatingAccount(true);
+    try {
+      const payload: Record<string, string> = {
+        email,
+        name,
+        password: 'Temp1234!',
+        role: newAccountRole,
+      };
+      if (newAccountRole === 'SOUS_LOCALITE_ADMIN') {
+        payload.sousLocaliteId = selectedSousLocaliteId;
+      }
+      const res = await api.post<{ user: User; tempPassword?: string }>('/auth/signup', payload);
+      const pwd = (res.data as any)?.tempPassword || 'Temp1234!';
+      window.prompt('Mot de passe temporaire (copie-le et transmets-le) :', pwd);
+      try { await navigator.clipboard.writeText(pwd); } catch {}
+      toast.success(`Compte ${newAccountRole === 'COMITE_PEDAGOGIQUE' ? 'Comité Pédagogique' : 'Admin Sous-Localité'} créé`);
+      setNewAccountName('');
+      setNewAccountEmail('');
+      setSelectedSousLocaliteId('');
+      fetchUsers();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Erreur lors de la création du compte');
+    } finally {
+      setIsCreatingAccount(false);
+    }
   };
 
   const fetchOrgUnitsData = async () => {
@@ -217,6 +279,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     fetchOrgUnitsData();
+    fetchSousLocalites();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.role, user?.localiteId]);
 
@@ -244,6 +307,7 @@ export default function UsersPage() {
   const roleLabel = (r: UserRole) => {
     if (r === 'OWNER') return 'OWNER';
     if (r === 'LOCALITE') return 'Super Admin';
+    if (r === 'COMITE_PEDAGOGIQUE') return 'Comité Pédagogique';
     if (r === 'SOUS_LOCALITE_ADMIN') return 'Admin Sous-Localité';
     if (r === 'SECTION_USER') return 'Utilisateur Section';
     if (r === 'ORG_UNIT_RESP') return 'Resp Cellule/Commission';
@@ -253,6 +317,7 @@ export default function UsersPage() {
   const roleBadgeVariant = (r: UserRole) => {
     if (r === 'OWNER') return 'default';
     if (r === 'LOCALITE') return 'default';
+    if (r === 'COMITE_PEDAGOGIQUE') return 'default';
     if (r === 'SOUS_LOCALITE_ADMIN') return 'accent';
     return 'secondary';
   };
@@ -317,11 +382,66 @@ export default function UsersPage() {
         >
           <option value="">Tous les rôles</option>
           <option value="LOCALITE">LOCALITE</option>
+          <option value="COMITE_PEDAGOGIQUE">COMITE_PEDAGOGIQUE</option>
           <option value="SOUS_LOCALITE_ADMIN">SOUS_LOCALITE_ADMIN</option>
           <option value="SECTION_USER">SECTION_USER</option>
           <option value="ORG_UNIT_RESP">ORG_UNIT_RESP</option>
         </select>
       </motion.div>
+
+      {/* Formulaire de création de comptes (LOCALITE uniquement) */}
+      {isLocalite && (
+        <motion.div variants={itemVariants}>
+          <Card className="p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Créer un compte</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Comité Pédagogique ou Admin Sous-Localité</p>
+              </div>
+              <Plus className="w-6 h-6 text-primary" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              <Input value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)} placeholder="Nom complet" />
+              <Input value={newAccountEmail} onChange={(e) => setNewAccountEmail(e.target.value)} placeholder="Email" />
+              <select
+                value={newAccountRole}
+                onChange={(e) => {
+                  setNewAccountRole(e.target.value as 'COMITE_PEDAGOGIQUE' | 'SOUS_LOCALITE_ADMIN');
+                  if (e.target.value === 'COMITE_PEDAGOGIQUE') setSelectedSousLocaliteId('');
+                }}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="COMITE_PEDAGOGIQUE">Comité Pédagogique</option>
+                <option value="SOUS_LOCALITE_ADMIN">Admin Sous-Localité</option>
+              </select>
+              {newAccountRole === 'SOUS_LOCALITE_ADMIN' ? (
+                <select
+                  value={selectedSousLocaliteId}
+                  onChange={(e) => setSelectedSousLocaliteId(e.target.value)}
+                  className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                >
+                  <option value="">Choisir une sous-localité</option>
+                  {sousLocalites.map((sl) => (
+                    <option key={sl.id} value={sl.id}>{sl.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400 italic px-2">
+                  Lié à votre localité
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3">
+              <Button onClick={createAccount} disabled={isCreatingAccount} className="w-full">
+                <Plus className="w-4 h-4 mr-2" />
+                {isCreatingAccount ? 'Création...' : 'Créer le compte'}
+              </Button>
+            </div>
+          </Card>
+        </motion.div>
+      )}
 
       {isLocalite ? (
         <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -498,6 +618,7 @@ export default function UsersPage() {
                       {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}
                     </td>
                     <td className="py-3 px-4">
+                      {user?.role !== 'COMITE_PEDAGOGIQUE' ? (
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
@@ -519,6 +640,9 @@ export default function UsersPage() {
                           Débloquer
                         </Button>
                       </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">Lecture seule</span>
+                      )}
                     </td>
                   </tr>
                 ))

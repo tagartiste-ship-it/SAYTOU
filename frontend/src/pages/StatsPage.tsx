@@ -48,7 +48,7 @@ export default function StatsPage() {
       } else if (user?.role === 'SOUS_LOCALITE_ADMIN' && user.sousLocaliteId) {
         statsRes = await api.get(`/stats/sous-localite/${user.sousLocaliteId}`, { params });
         setStats(statsRes.data.statistiques);
-      } else if (user?.role === 'OWNER' || user?.role === 'LOCALITE') {
+      } else if (user?.role === 'OWNER' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE') {
         statsRes = await api.get('/stats/global', { params });
         setStats(statsRes.data.statistiques);
       }

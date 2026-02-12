@@ -88,7 +88,7 @@ export default function EditRencontrePage() {
   type SectionInfo = { sectionId: string; sectionName: string; sousLocaliteName?: string; total: number };
   const [sectionsInfo, setSectionsInfo] = useState<SectionInfo[]>([]);
   const [sectionPresenceCounts, setSectionPresenceCounts] = useState<Record<string, { hommes: number; femmes: number }>>({}); 
-  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE';
+  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE';
 
   const selectedType = types.find((t) => t.id === formData.typeId);
 

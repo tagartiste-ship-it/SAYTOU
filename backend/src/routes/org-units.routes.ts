@@ -254,7 +254,7 @@ const canReadInstance = async (req: AuthRequest, instance: { scopeType: string; 
     return false;
   }
 
-  if (user.role === 'LOCALITE') {
+  if (user.role === 'LOCALITE' || user.role === 'COMITE_PEDAGOGIQUE') {
     const localiteId = user.localiteId ?? null;
     if (!localiteId) return false;
     if (instance.scopeType === 'LOCALITE') return instance.scopeId === localiteId;

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiche - Cellules & Commissions</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; color: #1f2937; padding: 2rem; }
+  .container { max-width: 800px; margin: 0 auto; }
+  h1 { text-align: center; font-size: 1.8rem; margin-bottom: 0.5rem; color: #1e40af; }
+  .subtitle { text-align: center; color: #6b7280; margin-bottom: 2rem; font-size: 0.95rem; }
+  .copy-zone { background: #fff; border: 2px solid #e5e7eb; border-radius: 12px; padding: 2rem; position: relative; }
+  .copy-btn { position: absolute; top: 12px; right: 12px; background: #2563eb; color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+  .copy-btn:hover { background: #1d4ed8; }
+  .copy-btn.copied { background: #16a34a; }
+  .doc h2 { font-size: 1.4rem; color: #1e40af; margin: 1.5rem 0 0.5rem; border-bottom: 2px solid #dbeafe; padding-bottom: 0.3rem; }
+  .doc h2:first-child { margin-top: 0; }
+  .doc h3 { font-size: 1.1rem; color: #1e3a5f; margin: 1rem 0 0.4rem; }
+  .doc p { line-height: 1.7; margin-bottom: 0.6rem; }
+  .doc ul, .doc ol { margin: 0.5rem 0 0.8rem 1.5rem; line-height: 1.7; }
+  .doc li { margin-bottom: 0.3rem; }
+  .doc .badge { display: inline-block; background: #dbeafe; color: #1e40af; font-size: 0.8rem; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
+  .doc .badge-green { background: #dcfce7; color: #166534; }
+  .doc .badge-orange { background: #ffedd5; color: #9a3412; }
+  .doc .note { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 0.8rem 1rem; border-radius: 0 8px 8px 0; margin: 1rem 0; font-size: 0.9rem; }
+  .doc .warn { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 0.8rem 1rem; border-radius: 0 8px 8px 0; margin: 1rem 0; font-size: 0.9rem; }
+  .doc table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.9rem; }
+  .doc th, .doc td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+  .doc th { background: #f0f4ff; font-weight: 600; color: #1e40af; }
+  .doc hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Fiche d'utilisation</h1>
+  <p class="subtitle">Cellules & Commissions — Guide pour les sections</p>
+
+  <div class="copy-zone" id="copyZone">
+    <button class="copy-btn" id="copyBtn" onclick="copyText()">Copier le texte</button>
+
+    <div class="doc" id="docContent">
+
+<h2>1. CELLULES</h2>
+
+<h3>Qu'est-ce qu'une cellule ?</h3>
+<p>Une <strong>cellule</strong> est une sous-structure organisationnelle au sein d'une section. Elle regroupe un ensemble de membres autour d'une thématique ou d'une mission spécifique (ex : cellule communication, cellule organisation, cellule discipline, etc.).</p>
+
+<h3>Qui peut y accéder ?</h3>
+<table>
+  <tr><th>Rôle</th><th>Accès</th><th>Actions possibles</th></tr>
+  <tr><td><span class="badge">SECTION_USER</span></td><td>Ses cellules de section</td><td>Consulter, ajouter et retirer des membres</td></tr>
+  <tr><td><span class="badge">LOCALITE</span></td><td>Toutes les cellules de la localité</td><td>Consultation uniquement</td></tr>
+</table>
+
+<h3>Comment ça fonctionne ?</h3>
+<ol>
+  <li><strong>Accéder à la page</strong> : dans le menu latéral, cliquez sur <strong>Cellules</strong>.</li>
+  <li><strong>Consulter les cellules</strong> : la liste de toutes les cellules s'affiche sous forme de cartes. Chaque carte indique le nom de la cellule, son périmètre (SECTION ou LOCALITE) et le nombre de membres.</li>
+  <li><strong>Voir les membres</strong> : les membres de chaque cellule sont listés avec leur nom, prénom et fonction.</li>
+</ol>
+
+<h3>Ajouter un membre à une cellule <span class="badge-green badge">Section uniquement</span></h3>
+<ol>
+  <li>Dans le formulaire en haut de page <em>"Ajouter un membre dans une cellule"</em> :</li>
+  <li><strong>Sélectionner la cellule</strong> dans la liste déroulante.</li>
+  <li><strong>Rechercher le membre</strong> par nom ou prénom dans le champ de recherche.</li>
+  <li><strong>Sélectionner le membre</strong> dans la liste déroulante des résultats.</li>
+  <li>Cliquer sur le bouton <strong>+ Ajouter</strong>.</li>
+</ol>
+
+<h3>Retirer un membre d'une cellule <span class="badge-orange badge">Section uniquement</span></h3>
+<p>Sur la carte de la cellule concernée, cliquez sur l'icône <strong>corbeille</strong> (rouge) à droite du nom du membre. Le retrait est immédiat.</p>
+
+<div class="note">
+  <strong>Note :</strong> Seuls les utilisateurs de type <strong>SECTION_USER</strong> peuvent ajouter ou retirer des membres. Les utilisateurs LOCALITE ont un accès en lecture seule sur l'ensemble des cellules.
+</div>
+
+<hr>
+
+<h2>2. COMMISSIONS</h2>
+
+<h3>Qu'est-ce qu'une commission ?</h3>
+<p>Une <strong>commission</strong> est une structure similaire à une cellule, mais orientée vers des missions transversales ou des projets spécifiques (ex : commission des finances, commission des fêtes, commission sociale, etc.).</p>
+
+<h3>Qui peut y accéder ?</h3>
+<table>
+  <tr><th>Rôle</th><th>Accès</th><th>Actions possibles</th></tr>
+  <tr><td><span class="badge">SECTION_USER</span></td><td>Ses commissions de section</td><td>Consulter, ajouter et retirer des membres</td></tr>
+  <tr><td><span class="badge">LOCALITE</span></td><td>Toutes les commissions de la localité</td><td>Consultation uniquement</td></tr>
+</table>
+
+<h3>Comment ça fonctionne ?</h3>
+<ol>
+  <li><strong>Accéder à la page</strong> : dans le menu latéral, cliquez sur <strong>Commissions</strong>.</li>
+  <li><strong>Consulter les commissions</strong> : la liste s'affiche sous forme de cartes avec le nom, le périmètre et le nombre de membres.</li>
+  <li><strong>Voir les membres</strong> : chaque carte liste les membres avec leur nom, prénom et fonction.</li>
+</ol>
+
+<h3>Ajouter un membre à une commission <span class="badge-green badge">Section uniquement</span></h3>
+<ol>
+  <li>Dans le formulaire <em>"Ajouter un membre dans une commission"</em> :</li>
+  <li><strong>Sélectionner la commission</strong> dans la liste déroulante.</li>
+  <li><strong>Rechercher le membre</strong> par nom ou prénom.</li>
+  <li><strong>Sélectionner le membre</strong> trouvé.</li>
+  <li>Cliquer sur <strong>+ Ajouter</strong>.</li>
+</ol>
+
+<h3>Retirer un membre d'une commission <span class="badge-orange badge">Section uniquement</span></h3>
+<p>Cliquez sur l'icône <strong>corbeille</strong> (rouge) à droite du membre concerné. Le retrait est immédiat.</p>
+
+<hr>
+
+<h2>3. DIFFÉRENCES ENTRE CELLULES ET COMMISSIONS</h2>
+
+<table>
+  <tr><th>Critère</th><th>Cellule</th><th>Commission</th></tr>
+  <tr><td>Vocation</td><td>Structure permanente de la section</td><td>Mission transversale ou projet spécifique</td></tr>
+  <tr><td>Gestion des membres</td><td>Identique (ajout / retrait)</td><td>Identique (ajout / retrait)</td></tr>
+  <tr><td>Visibilité</td><td>Section + Localité</td><td>Section + Localité</td></tr>
+  <tr><td>Menu</td><td>Cellules</td><td>Commissions</td></tr>
+</table>
+
+<div class="warn">
+  <strong>Important :</strong> Un même membre peut appartenir à plusieurs cellules et/ou commissions en même temps. Vérifiez bien les affectations pour éviter les doublons ou les oublis.
+</div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function copyText() {
+  const el = document.getElementById('docContent');
+  const btn = document.getElementById('copyBtn');
+
+  // Build plain text from the HTML content
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+
+  // Try clipboard API first, fallback to execCommand
+  const text = el.innerText;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copié !';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copier le texte'; btn.classList.remove('copied'); }, 2000);
+    });
+  } else {
+    document.execCommand('copy');
+    btn.textContent = 'Copié !';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copier le texte'; btn.classList.remove('copied'); }, 2000);
+  }
+
+  sel.removeAllRanges();
+}
+</script>
+</body>
+</html>

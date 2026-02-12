@@ -147,8 +147,8 @@ router.get(
 
       let sections;
 
-      if (role === 'LOCALITE') {
-        // LOCALITÉ voit tout
+      if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
+        // LOCALITÉ / COMITE_PEDAGOGIQUE voit tout
         const where = sousLocaliteId ? { sousLocaliteId: sousLocaliteId as string } : {};
         sections = await prisma.section.findMany({
           where,

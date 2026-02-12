@@ -22,6 +22,7 @@ import { startBinomesAutoRotationJob } from './routes/binomes.routes.js';
 import bureauRoutes from './routes/bureau.routes.js';
 import institutionsRoutes from './routes/institutions.routes.js';
 import orgUnitsRoutes from './routes/org-units.routes.js';
+import messagesRoutes from './routes/messages.routes.js';
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use('/api/binomes', binomesRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/bureau', bureauRoutes);
 app.use('/api/org-units', orgUnitsRoutes);
+app.use('/api/messages', messagesRoutes);
 
 // Route de santé
 app.get('/health', (req: Request, res: Response) => {

@@ -154,7 +154,7 @@ const buildScopeWhereForCorpsMetier = async (req: AuthRequest) => {
     return { where } as const;
   }
 
-  if (user.role === 'LOCALITE' || user.role === 'ORG_UNIT_RESP') {
+  if (user.role === 'LOCALITE' || user.role === 'COMITE_PEDAGOGIQUE' || user.role === 'ORG_UNIT_RESP') {
     const creatorUser = await prisma.user.findUnique({
       where: { id: user.userId },
       select: {
@@ -209,7 +209,7 @@ router.get('/par-sections', authenticate, async (req: AuthRequest, res: Response
       return;
     }
 
-    if (user.role !== 'SOUS_LOCALITE_ADMIN' && user.role !== 'LOCALITE' && user.role !== 'OWNER') {
+    if (user.role !== 'SOUS_LOCALITE_ADMIN' && user.role !== 'LOCALITE' && user.role !== 'COMITE_PEDAGOGIQUE' && user.role !== 'OWNER') {
       res.status(403).json({ error: 'Accès non autorisé' });
       return;
     }
@@ -222,7 +222,7 @@ router.get('/par-sections', authenticate, async (req: AuthRequest, res: Response
         return;
       }
       sectionsWhere = { sousLocaliteId: user.sousLocaliteId };
-    } else if (user.role === 'LOCALITE') {
+    } else if (user.role === 'LOCALITE' || user.role === 'COMITE_PEDAGOGIQUE') {
       // Trouver la localité de l'utilisateur
       const actor = await prisma.user.findUnique({
         where: { id: user.userId },
@@ -487,7 +487,7 @@ router.get('/groupes-sanguins', authenticate, async (req: AuthRequest, res: Resp
       } else {
         where.section = { sousLocaliteId: user.sousLocaliteId };
       }
-    } else if (user.role === 'LOCALITE' || user.role === 'ORG_UNIT_RESP') {
+    } else if (user.role === 'LOCALITE' || user.role === 'COMITE_PEDAGOGIQUE' || user.role === 'ORG_UNIT_RESP') {
       const creatorUser = await prisma.user.findUnique({
         where: { id: user.userId },
         select: {

@@ -27,6 +27,7 @@ import CellulesPage from './pages/CellulesPage';
 import CommissionsPage from './pages/CommissionsPage';
 import PvCellulesPage from './pages/PvCellulesPage';
 import HistoriqueSectionsPage from './pages/HistoriqueSectionsPage';
+import MessagesPage from './pages/MessagesPage';
 
 // Layout
 import Layout from './components/Layout';
@@ -165,6 +166,7 @@ function App() {
           <Route path="mon-institution" element={<MonInstitutionPage />} />
           <Route path="cellules" element={<CellulesPage />} />
           <Route path="commissions" element={<CommissionsPage />} />
+          <Route path="messages" element={<MessagesPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -52,21 +52,26 @@ router.post('/signup', authenticate, async (req: AuthRequest, res: Response): Pr
     }
 
     // Règles de création :
-    // - LOCALITE peut créer uniquement SOUS_LOCALITE_ADMIN (dans sa sous-localité)
+    // - LOCALITE peut créer SOUS_LOCALITE_ADMIN (dans sa sous-localité) ou COMITE_PEDAGOGIQUE (dans sa localité)
     // - SOUS_LOCALITE_ADMIN peut créer uniquement SECTION_USER (dans ses sections)
     if (creator.role === 'LOCALITE') {
-      if (role !== 'SOUS_LOCALITE_ADMIN') {
+      if (role === 'COMITE_PEDAGOGIQUE') {
+        // COMITE_PEDAGOGIQUE est lié à la localité du créateur
+        if (sectionId || sousLocaliteId) {
+          res.status(400).json({ error: 'sectionId et sousLocaliteId non autorisés pour un compte COMITE_PEDAGOGIQUE' });
+          return;
+        }
+      } else if (role === 'SOUS_LOCALITE_ADMIN') {
+        if (!sousLocaliteId) {
+          res.status(400).json({ error: 'sousLocaliteId requis pour créer un compte SOUS_LOCALITE_ADMIN' });
+          return;
+        }
+        if (sectionId) {
+          res.status(400).json({ error: 'sectionId non autorisé pour un compte SOUS_LOCALITE_ADMIN' });
+          return;
+        }
+      } else {
         res.status(403).json({ error: 'Accès non autorisé' });
-        return;
-      }
-
-      if (!sousLocaliteId) {
-        res.status(400).json({ error: 'sousLocaliteId requis pour créer un compte SOUS_LOCALITE_ADMIN' });
-        return;
-      }
-
-      if (sectionId) {
-        res.status(400).json({ error: 'sectionId non autorisé pour un compte SOUS_LOCALITE_ADMIN' });
         return;
       }
     } else if (creator.role === 'SOUS_LOCALITE_ADMIN') {
@@ -120,6 +125,20 @@ router.post('/signup', authenticate, async (req: AuthRequest, res: Response): Pr
     // Hasher le mot de passe
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Pour COMITE_PEDAGOGIQUE, dériver la localiteId du créateur
+    let localiteIdForNew: string | null = null;
+    if (role === 'COMITE_PEDAGOGIQUE') {
+      const creatorFull = await prisma.user.findUnique({
+        where: { id: creator.userId },
+        select: { localiteId: true },
+      });
+      localiteIdForNew = creatorFull?.localiteId ?? null;
+      if (!localiteIdForNew) {
+        res.status(400).json({ error: 'Impossible de déterminer la localité du créateur' });
+        return;
+      }
+    }
+
     // Créer l'utilisateur
     const user = await prisma.user.create({
       data: {
@@ -127,6 +146,7 @@ router.post('/signup', authenticate, async (req: AuthRequest, res: Response): Pr
         passwordHash,
         name,
         role,
+        localiteId: localiteIdForNew,
         sousLocaliteId: sousLocaliteId || null,
         sectionId: sectionId || null,
         mustChangePassword: true,
@@ -136,6 +156,7 @@ router.post('/signup', authenticate, async (req: AuthRequest, res: Response): Pr
         email: true,
         name: true,
         role: true,
+        localiteId: true,
         sousLocaliteId: true,
         sectionId: true,
         mustChangePassword: true,

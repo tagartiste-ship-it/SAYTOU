@@ -44,8 +44,8 @@ export async function determineScopeFromUser(req: AuthRequest, res: Response, ne
       }
       scopeType = 'SOUS_LOCALITE';
       scopeId = user.sousLocaliteId;
-    } else if (role === 'LOCALITE') {
-      // Pour LOCALITE, on utilise un ID fictif car il a accès à tout
+    } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
+      // Pour LOCALITE / COMITE_PEDAGOGIQUE, on utilise un ID fictif car il a accès à tout
       scopeType = 'LOCALITE';
       scopeId = 'LOCALITE';
     } else {
@@ -96,8 +96,8 @@ export async function canViewRencontre(
 
   if (!user) return false;
 
-  // LOCALITE peut tout voir
-  if (role === 'LOCALITE') return true;
+  // LOCALITE / COMITE_PEDAGOGIQUE peut tout voir
+  if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') return true;
 
   // SOUS_LOCALITE_ADMIN peut voir ses rencontres et celles des sections de sa zone
   if (role === 'SOUS_LOCALITE_ADMIN') {
@@ -156,7 +156,7 @@ export async function canModifyRencontre(
     return rencontre.scopeType === 'SOUS_LOCALITE' && rencontre.scopeId === user.sousLocaliteId;
   }
 
-  if (role === 'LOCALITE') {
+  if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
     return rencontre.scopeType === 'LOCALITE';
   }
 

@@ -118,8 +118,8 @@ router.post(
         }
         
         finalSectionId = sectionId;
-      } else if (role === 'LOCALITE') {
-        // LOCALITE crée pour la localité
+      } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
+        // LOCALITE / COMITE_PEDAGOGIQUE crée pour la localité
         scopeType = 'LOCALITE';
         scopeId = 'LOCALITE';
         
@@ -212,7 +212,7 @@ router.get(
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { userId, role } = req.user!;
-      if (role !== 'SOUS_LOCALITE_ADMIN') {
+      if (role !== 'SOUS_LOCALITE_ADMIN' && role !== 'COMITE_PEDAGOGIQUE') {
         res.status(403).json({ error: 'Accès non autorisé' });
         return;
       }
@@ -224,22 +224,35 @@ router.get(
 
       const actor = await prisma.user.findUnique({
         where: { id: userId },
-        select: { sousLocaliteId: true },
+        select: { sousLocaliteId: true, localiteId: true },
       });
-      if (!actor?.sousLocaliteId) {
-        res.status(403).json({ error: 'Sous-localité non définie pour cet utilisateur' });
-        return;
+
+      let sectionsWhere: any = {};
+      if (role === 'COMITE_PEDAGOGIQUE') {
+        // COMITE_PEDAGOGIQUE voit toutes les sections de la localité
+        if (!actor?.localiteId) {
+          res.status(403).json({ error: 'Localité non définie pour cet utilisateur' });
+          return;
+        }
+        sectionsWhere = { sousLocalite: { localiteId: actor.localiteId } };
+      } else {
+        // SOUS_LOCALITE_ADMIN voit uniquement les sections de sa sous-localité
+        if (!actor?.sousLocaliteId) {
+          res.status(403).json({ error: 'Sous-localité non définie pour cet utilisateur' });
+          return;
+        }
+        sectionsWhere = { sousLocaliteId: actor.sousLocaliteId };
       }
 
       const sections = await prisma.section.findMany({
-        where: { sousLocaliteId: actor.sousLocaliteId },
+        where: sectionsWhere,
         select: { id: true, name: true },
         orderBy: { name: 'asc' },
       });
 
       const sectionIds = sections.map((s) => s.id);
       if (!sectionIds.length) {
-        res.json({ sousLocaliteId: actor.sousLocaliteId, sections: [] });
+        res.json({ sousLocaliteId: actor?.sousLocaliteId ?? null, sections: [] });
         return;
       }
 
@@ -403,8 +416,8 @@ router.get(
             return;
           }
         }
-      } else if (role === 'LOCALITE') {
-        // LOCALITE voit tout
+      } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
+        // LOCALITE / COMITE_PEDAGOGIQUE voit tout
         if (sectionId) {
           where.sectionId = sectionId as string;
         }
@@ -614,7 +627,7 @@ router.put(
           res.status(403).json({ error: 'Vous ne pouvez modifier que vos propres rencontres' });
           return;
         }
-      } else if (role === 'LOCALITE') {
+      } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
         if (existingRencontre.scopeType !== 'LOCALITE') {
           res.status(403).json({ error: 'Vous ne pouvez modifier que vos propres rencontres' });
           return;
@@ -783,7 +796,7 @@ router.delete(
           res.status(403).json({ error: 'Vous ne pouvez supprimer que vos propres rencontres' });
           return;
         }
-      } else if (role === 'LOCALITE') {
+      } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
         if (rencontre.scopeType !== 'LOCALITE') {
           res.status(403).json({ error: 'Vous ne pouvez supprimer que vos propres rencontres' });
           return;

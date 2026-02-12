@@ -13,6 +13,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 
 export default function MembresPage() {
   const { user } = useAuthStore();
+  const isReadOnly = user?.role === 'COMITE_PEDAGOGIQUE' || user?.role === 'LOCALITE';
   const [membres, setMembres] = useState<Membre[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
@@ -399,6 +400,7 @@ export default function MembresPage() {
           <Badge variant="accent" className="px-3 py-1 text-sm">
             👩 {totalFemmes} Femmes
           </Badge>
+          {!isReadOnly && (
           <Button
             onClick={handleAdd}
             className="inline-flex items-center gap-2"
@@ -407,6 +409,7 @@ export default function MembresPage() {
             <Plus className="w-5 h-5" />
             Ajouter un membre
           </Button>
+          )}
         </div>
       </motion.div>
 
@@ -546,7 +549,7 @@ export default function MembresPage() {
                 <option value="250">250</option>
                 <option value="500">500</option>
                 <option value="1000">1000</option>
-                {user?.role === 'LOCALITE' ? <option value="100000">100000</option> : null}
+                {(user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE') ? <option value="100000">100000</option> : null}
               </select>
             </div>
           </div>
@@ -580,10 +583,12 @@ export default function MembresPage() {
             <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Aucun membre</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">Commencez par ajouter votre premier membre</p>
+            {!isReadOnly && (
             <Button onClick={handleAdd}>
               <Plus className="w-4 h-4 mr-2" />
               Ajouter un membre
             </Button>
+            )}
           </Card>
         </motion.div>
       ) : (
@@ -1009,6 +1014,7 @@ export default function MembresPage() {
                                 )}
                               </div>
                             </div>
+                            {!isReadOnly && (
                             <div className="flex gap-2">
                               <motion.button
                                 whileHover={{ scale: 1.1 }}
@@ -1029,6 +1035,7 @@ export default function MembresPage() {
                                 <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
                               </motion.button>
                             </div>
+                            )}
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
@@ -1269,6 +1276,7 @@ export default function MembresPage() {
                                 )}
                               </div>
                             </div>
+                            {!isReadOnly && (
                             <div className="flex gap-2">
                               <motion.button
                                 whileHover={{ scale: 1.1 }}
@@ -1289,6 +1297,7 @@ export default function MembresPage() {
                                 <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
                               </motion.button>
                             </div>
+                            )}
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
@@ -1528,6 +1537,7 @@ export default function MembresPage() {
                                 )}
                               </div>
                             </div>
+                            {!isReadOnly && (
                             <div className="flex gap-2">
                               <motion.button
                                 whileHover={{ scale: 1.1 }}
@@ -1548,6 +1558,7 @@ export default function MembresPage() {
                                 <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
                               </motion.button>
                             </div>
+                            )}
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">

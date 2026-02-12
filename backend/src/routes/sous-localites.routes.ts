@@ -151,8 +151,8 @@ router.get(
 
       let sousLocalites;
 
-      if (role === 'LOCALITE') {
-        // LOCALITÉ voit tout
+      if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
+        // LOCALITÉ / COMITE_PEDAGOGIQUE voit tout
         sousLocalites = await prisma.sousLocalite.findMany({
           include: {
             sections: {

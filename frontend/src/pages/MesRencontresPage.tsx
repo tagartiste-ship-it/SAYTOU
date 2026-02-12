@@ -97,7 +97,7 @@ export default function MesRencontresPage() {
     if (user?.role === 'SOUS_LOCALITE_ADMIN') {
       return rencontre.scopeType === 'SOUS_LOCALITE' && rencontre.scopeId === user.sousLocaliteId;
     }
-    if (user?.role === 'LOCALITE') {
+    if (user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE') {
       return rencontre.scopeType === 'LOCALITE';
     }
     return false;
@@ -165,6 +165,7 @@ export default function MesRencontresPage() {
             {user?.role === 'SECTION_USER' && 'Rencontres de votre section'}
             {user?.role === 'SOUS_LOCALITE_ADMIN' && 'Rencontres de votre sous-localité et sections'}
             {user?.role === 'LOCALITE' && 'Toutes les rencontres'}
+            {user?.role === 'COMITE_PEDAGOGIQUE' && 'Toutes les rencontres (Comité Pédagogique)'}
           </p>
         </div>
         <Button

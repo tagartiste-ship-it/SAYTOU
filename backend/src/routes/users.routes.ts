@@ -138,7 +138,7 @@ router.post('/bootstrap-owner', async (req: AuthRequest, res: Response): Promise
 router.get(
   '/',
   authenticate,
-  authorize('LOCALITE', 'SOUS_LOCALITE_ADMIN'),
+  authorize('LOCALITE', 'COMITE_PEDAGOGIQUE', 'SOUS_LOCALITE_ADMIN'),
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { role: userRole, userId } = req.user!;
@@ -147,7 +147,7 @@ router.get(
       const search = typeof q === 'string' ? q.trim() : '';
       const roleFilter = typeof role === 'string' ? role : '';
 
-      if (userRole === 'LOCALITE') {
+      if (userRole === 'LOCALITE' || userRole === 'COMITE_PEDAGOGIQUE') {
         const actor = await (prisma.user as any).findUnique({
           where: { id: userId },
           select: {

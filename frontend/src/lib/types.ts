@@ -1,6 +1,7 @@
 export type UserRole =
   | 'OWNER'
   | 'LOCALITE'
+  | 'COMITE_PEDAGOGIQUE'
   | 'COMITE_ADMIN'
   | 'ZONE_ADMIN'
   | 'CONCLAVE_ADMIN'

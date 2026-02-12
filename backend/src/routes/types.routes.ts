@@ -27,7 +27,7 @@ const getRequestScope = async (req: AuthRequest): Promise<{ role: string; scopeT
 const canManageType = async (req: AuthRequest, type: { scopeType: ScopeType; scopeId: string | null }) => {
   const { role, scopeId } = await getRequestScope(req);
 
-  if (role === 'LOCALITE') return true;
+  if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') return true;
 
   if (role === 'SOUS_LOCALITE_ADMIN') {
     if (type.scopeType === 'SOUS_LOCALITE' && type.scopeId === scopeId) return true;
@@ -168,7 +168,7 @@ router.post(
 
         scopeType = 'SOUS_LOCALITE';
         scopeId = user.sousLocaliteId;
-      } else if (role === 'LOCALITE') {
+      } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
         // Types globaux (scopeType et scopeId restent null)
         scopeType = null;
         scopeId = null;

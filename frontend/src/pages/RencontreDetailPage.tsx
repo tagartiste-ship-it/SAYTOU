@@ -20,7 +20,7 @@ export default function RencontreDetailPage() {
   const { user } = useAuthStore();
   const [rencontre, setRencontre] = useState<Rencontre | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE';
+  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE';
 
   useEffect(() => {
     if (id) {
