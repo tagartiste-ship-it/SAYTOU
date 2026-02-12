@@ -138,7 +138,7 @@ router.post('/bootstrap-owner', async (req: AuthRequest, res: Response): Promise
 router.get(
   '/',
   authenticate,
-  authorize('LOCALITE', 'COMITE_PEDAGOGIQUE', 'SOUS_LOCALITE_ADMIN'),
+  authorize('OWNER', 'LOCALITE', 'COMITE_PEDAGOGIQUE', 'SOUS_LOCALITE_ADMIN'),
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { role: userRole, userId } = req.user!;
@@ -146,6 +146,48 @@ router.get(
 
       const search = typeof q === 'string' ? q.trim() : '';
       const roleFilter = typeof role === 'string' ? role : '';
+
+      if (userRole === 'OWNER') {
+        const users = await (prisma.user as any).findMany({
+          where: {
+            ...(roleFilter ? { role: roleFilter as any } : {}),
+            ...(search
+              ? {
+                  OR: [
+                    { email: { contains: search, mode: 'insensitive' as const } },
+                    { name: { contains: search, mode: 'insensitive' as const } },
+                  ],
+                }
+              : {}),
+          },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            localiteId: true,
+            sousLocaliteId: true,
+            sectionId: true,
+            failedLoginAttempts: true,
+            lockedUntil: true,
+            mustChangePassword: true,
+            createdAt: true,
+            localite: { select: { id: true, name: true } },
+            sousLocalite: { select: { id: true, name: true } },
+            section: {
+              select: {
+                id: true,
+                name: true,
+                sousLocalite: { select: { id: true, name: true } },
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        res.json({ users });
+        return;
+      }
 
       if (userRole === 'LOCALITE' || userRole === 'COMITE_PEDAGOGIQUE') {
         const actor = await (prisma.user as any).findUnique({
@@ -284,7 +326,7 @@ router.get(
 router.post(
   '/:id/unlock',
   authenticate,
-  authorize('LOCALITE', 'SOUS_LOCALITE_ADMIN'),
+  authorize('OWNER', 'LOCALITE', 'SOUS_LOCALITE_ADMIN'),
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const actor = req.user!;
@@ -316,7 +358,7 @@ router.post(
 router.post(
   '/:id/reset-password',
   authenticate,
-  authorize('LOCALITE', 'SOUS_LOCALITE_ADMIN'),
+  authorize('OWNER', 'LOCALITE', 'SOUS_LOCALITE_ADMIN'),
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const actor = req.user!;

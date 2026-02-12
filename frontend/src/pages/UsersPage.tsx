@@ -47,7 +47,7 @@ export default function UsersPage() {
     }[];
   }
 
-  const isLocalite = user?.role === 'LOCALITE';
+  const isLocalite = user?.role === 'LOCALITE' || user?.role === 'OWNER';
 
   const [respEmail, setRespEmail] = useState('');
   const [respName, setRespName] = useState('');
