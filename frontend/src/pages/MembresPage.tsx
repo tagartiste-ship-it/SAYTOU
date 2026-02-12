@@ -36,6 +36,7 @@ export default function MembresPage() {
   const [numeroCarteElecteurFilter, setNumeroCarteElecteurFilter] = useState('');
   const [statutElecteurFilter, setStatutElecteurFilter] = useState('');
 
+  const [ageTrancheFilter, setAgeTrancheFilter] = useState('');
   const [dateAdhesionDebutFilter, setDateAdhesionDebutFilter] = useState('');
   const [dateAdhesionFinFilter, setDateAdhesionFinFilter] = useState('');
 
@@ -97,6 +98,7 @@ export default function MembresPage() {
     numeroCNIFilter,
     numeroCarteElecteurFilter,
     statutElecteurFilter,
+    ageTrancheFilter,
     dateAdhesionDebutFilter,
     dateAdhesionFinFilter,
   ]);
@@ -189,6 +191,7 @@ export default function MembresPage() {
       if (numeroCNIFilter) params.numeroCNI = numeroCNIFilter;
       if (numeroCarteElecteurFilter) params.numeroCarteElecteur = numeroCarteElecteurFilter;
       if (statutElecteurFilter) params.statutElecteur = statutElecteurFilter;
+      if (ageTrancheFilter) params.ageTranche = ageTrancheFilter;
       if (dateAdhesionDebutFilter) params.dateAdhesionDebut = dateAdhesionDebutFilter;
       if (dateAdhesionFinFilter) params.dateAdhesionFin = dateAdhesionFinFilter;
 
@@ -339,6 +342,7 @@ export default function MembresPage() {
     setNumeroCNIFilter('');
     setNumeroCarteElecteurFilter('');
     setStatutElecteurFilter('');
+    setAgeTrancheFilter('');
     setDateAdhesionDebutFilter('');
     setDateAdhesionFinFilter('');
   };
@@ -437,6 +441,20 @@ export default function MembresPage() {
                 <option value="">Tous</option>
                 <option value="HOMME">Hommes</option>
                 <option value="FEMME">Femmes</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">Tranche d'âge</label>
+              <select
+                value={ageTrancheFilter}
+                onChange={(e) => setAgeTrancheFilter(e.target.value)}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="">Toutes</option>
+                <option value="S1">S1 (moins de 12 ans)</option>
+                <option value="S2">S2 (12-17 ans)</option>
+                <option value="S3">S3 (18 ans et +)</option>
               </select>
             </div>
 

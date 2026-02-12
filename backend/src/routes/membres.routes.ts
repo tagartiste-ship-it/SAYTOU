@@ -685,6 +685,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const numeroCNI = String(req.query.numeroCNI ?? '').trim();
     const numeroCarteElecteur = String(req.query.numeroCarteElecteur ?? '').trim();
     const statutElecteur = String(req.query.statutElecteur ?? '').trim().toUpperCase();
+    const ageTrancheFilter = String(req.query.ageTranche ?? '').trim().toUpperCase();
 
     const dateAdhesionDebutRaw = String(req.query.dateAdhesionDebut ?? '').trim();
     const dateAdhesionFinRaw = String(req.query.dateAdhesionFin ?? '').trim();
@@ -791,6 +792,9 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     if (telephone) whereAnd.push({ telephone: { contains: telephone, mode: 'insensitive' } });
     if (numeroCNI) whereAnd.push({ numeroCNI: { contains: numeroCNI, mode: 'insensitive' } });
     if (numeroCarteElecteur) whereAnd.push({ numeroCarteElecteur: { contains: numeroCarteElecteur, mode: 'insensitive' } });
+    if (ageTrancheFilter && ['S1', 'S2', 'S3'].includes(ageTrancheFilter)) {
+      whereAnd.push({ ageTranche: ageTrancheFilter });
+    }
 
     if (statutElecteur) {
       const now = new Date();

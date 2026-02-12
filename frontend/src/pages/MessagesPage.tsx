@@ -32,7 +32,7 @@ interface Recipient {
 
 export default function MessagesPage() {
   const { user } = useAuthStore();
-  const isComitePedagogique = user?.role === 'COMITE_PEDAGOGIQUE';
+  const canCompose = ['COMITE_PEDAGOGIQUE', 'SECTION_USER', 'ORG_UNIT_RESP'].includes(user?.role || '');
 
   const [tab, setTab] = useState<'inbox' | 'compose' | 'sent'>('inbox');
   const [messages, setMessages] = useState<MessageRow[]>([]);
@@ -45,7 +45,7 @@ export default function MessagesPage() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [recipientFilter, setRecipientFilter] = useState<'all' | 'SOUS_LOCALITE_ADMIN' | 'SECTION_USER'>('all');
+  const [recipientFilter, setRecipientFilter] = useState<'all' | 'COMITE_PEDAGOGIQUE' | 'SOUS_LOCALITE_ADMIN' | 'SECTION_USER'>('all');
 
   const fetchMessages = async (box: 'inbox' | 'sent') => {
     setIsLoading(true);
@@ -71,7 +71,7 @@ export default function MessagesPage() {
   useEffect(() => {
     if (tab === 'inbox') fetchMessages('inbox');
     else if (tab === 'sent') fetchMessages('sent');
-    else if (tab === 'compose' && isComitePedagogique) fetchRecipients();
+    else if (tab === 'compose' && canCompose) fetchRecipients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
@@ -176,7 +176,7 @@ export default function MessagesPage() {
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Messages</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            {isComitePedagogique ? 'Envoyez des messages aux sous-localités et sections' : 'Vos messages reçus'}
+            {canCompose ? 'Envoyez et recevez des messages' : 'Vos messages reçus'}
           </p>
         </div>
         {tab === 'inbox' && unreadCount > 0 && (
@@ -195,7 +195,7 @@ export default function MessagesPage() {
           Boîte de réception
           {unreadCount > 0 && <span className="ml-2 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">{unreadCount}</span>}
         </Button>
-        {isComitePedagogique && (
+        {canCompose && (
           <>
             <Button
               variant={tab === 'compose' ? 'primary' : 'outline'}
@@ -223,7 +223,7 @@ export default function MessagesPage() {
       </div>
 
       {/* Compose */}
-      {tab === 'compose' && isComitePedagogique && (
+      {tab === 'compose' && canCompose && (
         <Card className="p-0">
           <CardHeader>
             <CardTitle className="text-lg">Nouveau message</CardTitle>
@@ -232,10 +232,17 @@ export default function MessagesPage() {
             {/* Recipients filter */}
             <div>
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">Destinataires</label>
-              <div className="flex gap-2 mb-2">
+              <div className="flex gap-2 mb-2 flex-wrap">
                 <Button variant={recipientFilter === 'all' ? 'primary' : 'outline'} size="sm" onClick={() => setRecipientFilter('all')}>Tous</Button>
-                <Button variant={recipientFilter === 'SOUS_LOCALITE_ADMIN' ? 'primary' : 'outline'} size="sm" onClick={() => setRecipientFilter('SOUS_LOCALITE_ADMIN')}>Sous-Localités</Button>
-                <Button variant={recipientFilter === 'SECTION_USER' ? 'primary' : 'outline'} size="sm" onClick={() => setRecipientFilter('SECTION_USER')}>Sections</Button>
+                {recipients.some((r) => r.role === 'COMITE_PEDAGOGIQUE') && (
+                  <Button variant={recipientFilter === 'COMITE_PEDAGOGIQUE' ? 'primary' : 'outline'} size="sm" onClick={() => setRecipientFilter('COMITE_PEDAGOGIQUE')}>C. Pédagogique</Button>
+                )}
+                {recipients.some((r) => r.role === 'SOUS_LOCALITE_ADMIN') && (
+                  <Button variant={recipientFilter === 'SOUS_LOCALITE_ADMIN' ? 'primary' : 'outline'} size="sm" onClick={() => setRecipientFilter('SOUS_LOCALITE_ADMIN')}>Sous-Localités</Button>
+                )}
+                {recipients.some((r) => r.role === 'SECTION_USER') && (
+                  <Button variant={recipientFilter === 'SECTION_USER' ? 'primary' : 'outline'} size="sm" onClick={() => setRecipientFilter('SECTION_USER')}>Sections</Button>
+                )}
                 <div className="ml-auto flex gap-1">
                   <Button variant="outline" size="sm" onClick={selectAllFiltered}>Tout sélect.</Button>
                   <Button variant="outline" size="sm" onClick={deselectAllFiltered}>Tout désélect.</Button>
@@ -359,6 +366,23 @@ export default function MessagesPage() {
                   <div className="prose max-w-none">
                     <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedMessage.body}</p>
                   </div>
+                  {tab === 'inbox' && canCompose && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedRecipientIds([selectedMessage.sender.id]);
+                          setSubject(`Re: ${selectedMessage.subject}`);
+                          setBody('');
+                          setTab('compose');
+                        }}
+                      >
+                        <Send className="w-4 h-4 mr-2" />
+                        Répondre
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ) : (

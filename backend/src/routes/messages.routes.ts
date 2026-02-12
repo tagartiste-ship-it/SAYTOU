@@ -53,37 +53,60 @@ router.get('/unread-count', authenticate, async (req: AuthRequest, res: Response
 
 /**
  * GET /api/messages/recipients
- * Liste des destinataires possibles pour COMITE_PEDAGOGIQUE
- * Retourne les comptes SOUS_LOCALITE_ADMIN et SECTION_USER de la même localité
+ * Liste des destinataires possibles selon le rôle:
+ * - COMITE_PEDAGOGIQUE: SOUS_LOCALITE_ADMIN + SECTION_USER de la même localité
+ * - SECTION_USER: COMITE_PEDAGOGIQUE + SOUS_LOCALITE_ADMIN de la même localité (réponse)
+ * - ORG_UNIT_RESP: SECTION_USER de la même localité (pour communiquer avec les sections)
  */
 router.get('/recipients', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { userId, role } = req.user!;
+    const canSend = ['COMITE_PEDAGOGIQUE', 'SECTION_USER', 'ORG_UNIT_RESP'].includes(role);
 
-    if (role !== 'COMITE_PEDAGOGIQUE') {
-      res.status(403).json({ error: 'Seul le Comité Pédagogique peut envoyer des messages' });
+    if (!canSend) {
+      res.status(403).json({ error: 'Vous n\'êtes pas autorisé à envoyer des messages' });
       return;
     }
 
     // Trouver la localité de l'utilisateur
     const actor = await prisma.user.findUnique({
       where: { id: userId },
-      select: { localiteId: true },
+      select: {
+        localiteId: true,
+        sousLocaliteId: true,
+        sectionId: true,
+        sousLocalite: { select: { localiteId: true } },
+        section: { select: { sousLocalite: { select: { localiteId: true } } } },
+      },
     });
 
-    if (!actor?.localiteId) {
+    const localiteId = actor?.localiteId
+      || actor?.sousLocalite?.localiteId
+      || actor?.section?.sousLocalite?.localiteId
+      || null;
+
+    if (!localiteId) {
       res.status(403).json({ error: 'Localité non définie' });
       return;
     }
 
-    // Trouver tous les SOUS_LOCALITE_ADMIN et SECTION_USER de la même localité
+    let targetRoles: any[] = [];
+    if (role === 'COMITE_PEDAGOGIQUE') {
+      targetRoles = ['SOUS_LOCALITE_ADMIN', 'SECTION_USER'];
+    } else if (role === 'SECTION_USER') {
+      targetRoles = ['COMITE_PEDAGOGIQUE', 'SOUS_LOCALITE_ADMIN'];
+    } else if (role === 'ORG_UNIT_RESP') {
+      targetRoles = ['SECTION_USER', 'COMITE_PEDAGOGIQUE', 'SOUS_LOCALITE_ADMIN'];
+    }
+
     const recipients = await prisma.user.findMany({
       where: {
         id: { not: userId },
-        role: { in: ['SOUS_LOCALITE_ADMIN', 'SECTION_USER'] },
+        role: { in: targetRoles as any },
         OR: [
-          { sousLocalite: { localiteId: actor.localiteId } },
-          { section: { sousLocalite: { localiteId: actor.localiteId } } },
+          { localiteId },
+          { sousLocalite: { localiteId } },
+          { section: { sousLocalite: { localiteId } } },
         ],
       },
       select: {
@@ -106,14 +129,15 @@ router.get('/recipients', authenticate, async (req: AuthRequest, res: Response):
 
 /**
  * POST /api/messages
- * Envoyer un message (COMITE_PEDAGOGIQUE uniquement)
+ * Envoyer un message (COMITE_PEDAGOGIQUE, SECTION_USER, ORG_UNIT_RESP)
  */
 router.post('/', authenticate, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { userId, role } = req.user!;
+    const canSend = ['COMITE_PEDAGOGIQUE', 'SECTION_USER', 'ORG_UNIT_RESP'].includes(role);
 
-    if (role !== 'COMITE_PEDAGOGIQUE') {
-      res.status(403).json({ error: 'Seul le Comité Pédagogique peut envoyer des messages' });
+    if (!canSend) {
+      res.status(403).json({ error: 'Vous n\'êtes pas autorisé à envoyer des messages' });
       return;
     }
 
@@ -135,12 +159,9 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
-    // Vérifier que les destinataires existent et sont SOUS_LOCALITE_ADMIN ou SECTION_USER
+    // Vérifier que les destinataires existent
     const validRecipients = await prisma.user.findMany({
-      where: {
-        id: { in: ids },
-        role: { in: ['SOUS_LOCALITE_ADMIN', 'SECTION_USER'] },
-      },
+      where: { id: { in: ids } },
       select: { id: true },
     });
 

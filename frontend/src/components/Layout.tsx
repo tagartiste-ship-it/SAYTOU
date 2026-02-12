@@ -174,7 +174,7 @@ export default function Layout() {
     { name: 'Commissions', href: '/commissions', icon: Building2, roles: ['LOCALITE', 'SECTION_USER'] },
     { name: 'Bureau', href: '/bureau', icon: Briefcase },
     { name: 'Binômes', href: '/binomes', icon: UsersRound, roles: ['OWNER', 'LOCALITE', 'SECTION_USER'] },
-    { name: 'Messages', href: '/messages', icon: MessageSquare, roles: ['COMITE_PEDAGOGIQUE', 'SOUS_LOCALITE_ADMIN', 'SECTION_USER'] },
+    { name: 'Messages', href: '/messages', icon: MessageSquare, roles: ['COMITE_PEDAGOGIQUE', 'SOUS_LOCALITE_ADMIN', 'SECTION_USER', 'ORG_UNIT_RESP'] },
     { name: 'Mon Institution', href: '/mon-institution', icon: Building2, roles: ['ORG_UNIT_RESP', 'OWNER'] },
     { name: 'Utilisateurs', href: '/users', icon: UserCog, roles: ['LOCALITE', 'COMITE_PEDAGOGIQUE'] },
     { name: 'Sous-Localités', href: '/sous-localites', icon: Building2, roles: ['LOCALITE', 'COMITE_PEDAGOGIQUE'] },
