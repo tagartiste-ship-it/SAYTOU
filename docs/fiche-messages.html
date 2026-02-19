@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SAYTOU — Fiche d’utilisation — Rubrique Messages</title>
+  <style>
+    :root{
+      --text:#0f172a;
+      --muted:#475569;
+      --border:#e2e8f0;
+      --bg:#ffffff;
+      --chip:#f1f5f9;
+      --accent:#2563eb;
+    }
+    *{box-sizing:border-box;}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      color:var(--text);
+      background:var(--bg);
+      line-height:1.45;
+    }
+    .page{
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 32px 28px 56px;
+    }
+    header{
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 16px;
+      margin-bottom: 18px;
+    }
+    h1{
+      margin:0;
+      font-size: 26px;
+      letter-spacing: -0.01em;
+    }
+    .subtitle{
+      margin-top:6px;
+      color:var(--muted);
+      font-size: 14px;
+    }
+    h2{
+      margin: 22px 0 10px;
+      font-size: 18px;
+      border-left: 4px solid var(--accent);
+      padding-left: 10px;
+    }
+    h3{
+      margin: 14px 0 6px;
+      font-size: 15px;
+    }
+    p{margin: 6px 0 10px;}
+    ul{margin: 6px 0 12px; padding-left: 18px;}
+    li{margin: 5px 0;}
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .card{
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 12px;
+      background: #fff;
+    }
+    .chip{
+      display:inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: #0f172a;
+      margin-right: 6px;
+      white-space: nowrap;
+    }
+    .muted{color:var(--muted);}
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+      background: #0b1220;
+      color:#fff;
+      padding:2px 7px;
+      border-radius: 6px;
+      display:inline-block;
+      margin-right:6px;
+    }
+    .note{
+      border-left: 4px solid #f59e0b;
+      background: #fffbeb;
+      padding: 10px 12px;
+      border-radius: 10px;
+    }
+    .ok{
+      border-left: 4px solid #16a34a;
+      background: #f0fdf4;
+      padding: 10px 12px;
+      border-radius: 10px;
+    }
+    .table{
+      width:100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .table th, .table td{
+      border: 1px solid var(--border);
+      padding: 8px 9px;
+      text-align:left;
+      vertical-align: top;
+    }
+    .table th{background:#f8fafc;}
+
+    /* Print */
+    @media print{
+      body{background:#fff;}
+      .page{max-width:100%; padding: 12mm 10mm 14mm;}
+      a{color:inherit; text-decoration:none;}
+      .card, .note, .ok{break-inside: avoid;}
+      header{margin-bottom: 10px;}
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>SAYTOU — Fiche d’utilisation — Rubrique <span style="color:var(--accent)">Messages</span></h1>
+      <div class="subtitle">
+        Objectif: envoyer et recevoir des messages entre les comptes autorisés (Comité Pédagogique, Sous-Localité, Sections, Cellules/Commissions).
+      </div>
+    </header>
+
+    <h2>1) Accès à la rubrique</h2>
+    <div class="card">
+      <p>
+        Dans le menu à gauche, cliquez sur <span class="chip">Messages</span>.
+        Vous arrivez sur 3 onglets:
+        <span class="chip">Boîte de réception</span>, <span class="chip">Nouveau message</span>, <span class="chip">Envoyés</span>.
+      </p>
+      <p class="muted">Remarque: si votre rôle n’a pas le droit d’envoyer, l’onglet “Nouveau message” peut ne pas apparaître.</p>
+    </div>
+
+    <h2>2) Rôles et qui peut écrire à qui</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Rôle (expéditeur)</th>
+          <th>Peut envoyer à…</th>
+          <th>Cas d’usage</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="chip">COMITE_PEDAGOGIQUE</span></td>
+          <td>
+            <span class="chip">SOUS_LOCALITE_ADMIN</span>
+            <span class="chip">SECTION_USER</span>
+          </td>
+          <td>Informer / demander des rapports aux sous-localités et sections.</td>
+        </tr>
+        <tr>
+          <td><span class="chip">SOUS_LOCALITE_ADMIN</span></td>
+          <td class="muted">(selon configuration actuelle) Réception + réponse via Messages si l’onglet “Nouveau message” est disponible.</td>
+          <td>Réception des consignes et suivi.</td>
+        </tr>
+        <tr>
+          <td><span class="chip">SECTION_USER</span></td>
+          <td>
+            <span class="chip">COMITE_PEDAGOGIQUE</span>
+            <span class="chip">SOUS_LOCALITE_ADMIN</span>
+          </td>
+          <td>Répondre aux messages reçus, remonter une information.</td>
+        </tr>
+        <tr>
+          <td><span class="chip">ORG_UNIT_RESP</span> (Cellule/Commission)</td>
+          <td>
+            <span class="chip">SECTION_USER</span>
+            <span class="chip">SOUS_LOCALITE_ADMIN</span>
+            <span class="chip">COMITE_PEDAGOGIQUE</span>
+          </td>
+          <td>Communication opérationnelle avec les sections et l’administration.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="note" style="margin-top:10px;">
+      <strong>Important:</strong>
+      La liste des destinataires est automatiquement filtrée par la <strong>même localité</strong> (même zone d’organisation), selon les règles d’accès.
+    </div>
+
+    <h2>3) Lire les messages (Boîte de réception)</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Voir la liste</h3>
+        <ul>
+          <li>Onglet <span class="chip">Boîte de réception</span>.</li>
+          <li>Les messages non lus apparaissent en surbrillance.</li>
+          <li>Le compteur “non lu(s)” s’affiche en haut.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Marquer comme lu</h3>
+        <ul>
+          <li>Cliquer sur un message l’ouvre et le marque comme lu.</li>
+          <li>Vous pouvez aussi utiliser <span class="chip">Tout marquer comme lu</span>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>4) Répondre à un message</h2>
+    <div class="ok">
+      <p>
+        Ouvrez un message reçu puis cliquez sur <span class="chip">Répondre</span>.
+        L’application prépare un nouveau message avec:
+      </p>
+      <ul>
+        <li>Le destinataire = l’expéditeur du message</li>
+        <li>Le sujet = <span class="chip">Re: ...</span></li>
+      </ul>
+      <p class="muted">Ensuite, saisissez votre texte puis envoyez.</p>
+    </div>
+
+    <h2>5) Envoyer un nouveau message</h2>
+    <div class="card">
+      <h3>Étapes</h3>
+      <ol style="margin:6px 0 0; padding-left: 18px;">
+        <li>Aller dans l’onglet <span class="chip">Nouveau message</span>.</li>
+        <li>Choisir les destinataires (case à cocher).</li>
+        <li>Utiliser les filtres de destinataires: <span class="chip">Tous</span>, <span class="chip">Sections</span>, <span class="chip">Sous-Localités</span>, <span class="chip">C. Pédagogique</span> (selon disponibilité).</li>
+        <li>Renseigner <strong>Sujet</strong> et <strong>Message</strong>.</li>
+        <li>Cliquer sur <span class="chip">Envoyer</span>.</li>
+      </ol>
+      <p class="muted">Astuce: utilisez “Tout sélect.” / “Tout désélect.” pour gagner du temps.</p>
+    </div>
+
+    <h2>6) Messages envoyés</h2>
+    <div class="card">
+      <p>
+        Dans l’onglet <span class="chip">Envoyés</span>, vous voyez l’historique des messages que vous avez envoyés.
+        Vous pouvez ouvrir un message pour relire le contenu.
+      </p>
+    </div>
+
+    <h2>7) Exemples d’utilisation (cas concrets)</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Cellule Santé</h3>
+        <p class="muted">Exemple: demander aux sections de remonter les informations santé.</p>
+        <ul>
+          <li>Onglet Nouveau message</li>
+          <li>Filtre destinataires: <span class="chip">Sections</span></li>
+          <li>Sélectionner toutes les sections</li>
+          <li>Envoyer la consigne</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Cellule Corporatives</h3>
+        <p class="muted">Exemple: informer les représentants de sections.</p>
+        <ul>
+          <li>Onglet Nouveau message</li>
+          <li>Filtre destinataires: <span class="chip">Sections</span></li>
+          <li>Sélectionner les sections concernées</li>
+          <li>Envoyer l’annonce</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>8) Exporter cette fiche en PDF</h2>
+    <div class="card">
+      <p>
+        <strong>Sur Chrome / Edge (Windows):</strong>
+      </p>
+      <ol style="margin:6px 0 0; padding-left: 18px;">
+        <li>Ouvrir ce fichier: <span class="kbd">docs/fiche-messages.html</span></li>
+        <li>Appuyer sur <span class="kbd">Ctrl</span> + <span class="kbd">P</span></li>
+        <li>Destination: <strong>Enregistrer au format PDF</strong></li>
+        <li>Format papier: A4 — Marges: Par défaut — Cocher “Arrière-plans” si nécessaire</li>
+        <li>Cliquer sur <strong>Enregistrer</strong></li>
+      </ol>
+    </div>
+
+    <p class="muted" style="margin-top:18px; font-size:12px;">
+      Document interne — SAYTOU — Rubrique Messages
+    </p>
+  </div>
+</body>
+</html>

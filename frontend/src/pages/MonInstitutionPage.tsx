@@ -255,6 +255,7 @@ export default function MonInstitutionPage() {
     const meta = pvAuto?.meta ?? {};
     if (meta?.mode === 'MEMBRE_FILTER') {
       const defName = meta?.definition?.name ?? '';
+      const defCode = String(meta?.definition?.code ?? '').trim().toUpperCase();
       const filter = meta?.filter ?? {};
       const totalMembres = Number(meta?.totalMembres ?? 0) || 0;
       const lines: string[] = [];
@@ -270,7 +271,7 @@ export default function MonInstitutionPage() {
         lines.push(`## Section: ${s.sectionName || s.sectionId || ''}`.trim());
         const membres = Array.isArray(s.membres) ? s.membres : [];
         lines.push('');
-        lines.push(`| Prénom | Nom | Genre | Fonction | Corps de métier | Groupe sanguin | Carte électeur |`);
+        lines.push(`| Prénom | Nom | Genre | Fonction | Corps de métier | Groupe sanguin | ${defCode === 'SANTE' ? 'Téléphone' : 'Carte électeur'} |`);
         lines.push(`| --- | --- | --- | --- | --- | --- | --- |`);
         for (const m of membres) {
           const row = [
@@ -280,7 +281,7 @@ export default function MonInstitutionPage() {
             String(m?.fonction ?? '').replace(/\|/g, '\\|'),
             String(m?.corpsMetier ?? '').replace(/\|/g, '\\|'),
             String(m?.groupeSanguin ?? '').replace(/\|/g, '\\|'),
-            String(m?.numeroCarteElecteur ?? '').replace(/\|/g, '\\|'),
+            String((defCode === 'SANTE' ? m?.telephone : m?.numeroCarteElecteur) ?? '').replace(/\|/g, '\\|'),
           ];
           lines.push(`| ${row.join(' | ')} |`);
         }
@@ -867,7 +868,9 @@ export default function MonInstitutionPage() {
                                                                   <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Fonction</th>
                                                                   <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Corps de métier</th>
                                                                   <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Groupe sanguin</th>
-                                                                  <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">Carte électeur</th>
+                                                                  <th className="text-left px-3 py-2 border-b border-gray-200 dark:border-gray-800 whitespace-nowrap">
+                                                                    {defCode === 'SANTE' ? 'Téléphone' : 'Carte électeur'}
+                                                                  </th>
                                                                 </>
                                                               )}
                                                             </tr>
@@ -888,7 +891,9 @@ export default function MonInstitutionPage() {
                                                                     <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.fonction)}</td>
                                                                     <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.corpsMetier)}</td>
                                                                     <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.groupeSanguin)}</td>
-                                                                    <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">{formatCellValue(m?.numeroCarteElecteur)}</td>
+                                                                    <td className="px-3 py-2 border-b border-gray-200 dark:border-gray-800 align-top">
+                                                                      {formatCellValue(defCode === 'SANTE' ? m?.telephone : m?.numeroCarteElecteur)}
+                                                                    </td>
                                                                   </>
                                                                 )}
                                                               </tr>
