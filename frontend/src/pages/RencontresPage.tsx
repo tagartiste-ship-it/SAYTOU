@@ -264,12 +264,7 @@ export default function RencontresPage() {
                           {rencontre.type.name}
                         </Badge>
                         <span className="text-gray-500 dark:text-gray-400 text-sm">
-                          {rencontre.section?.name
-                            || (rencontre.scopeType === 'LOCALITE'
-                              ? 'Localité'
-                              : (rencontre.scopeType === 'SOUS_LOCALITE'
-                                ? 'Sous-localité'
-                                : '—'))}
+                          {rencontre.section.name}
                         </span>
                       </div>
 

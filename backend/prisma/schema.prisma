@@ -405,7 +405,7 @@ model TrancheAge {
 model Rencontre {
   id              String    @id @default(uuid())
   typeId          String    @map("type_id")
-  sectionId       String?   @map("section_id")
+  sectionId       String    @map("section_id")
   scopeType       ScopeType @map("scope_type")
   scopeId         String    @map("scope_id")
   lieuMembreId    String?   @map("lieu_membre_id")
@@ -431,7 +431,7 @@ model Rencontre {
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
   type       RencontreType @relation(fields: [typeId], references: [id])
-  section    Section?      @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  section    Section       @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   lieuMembre Membre?       @relation("RencontreLieuMembre", fields: [lieuMembreId], references: [id], onDelete: SetNull)
   createdBy  User          @relation("CreatedBy", fields: [createdById], references: [id])
   updatedBy  User?         @relation("UpdatedBy", fields: [updatedById], references: [id])

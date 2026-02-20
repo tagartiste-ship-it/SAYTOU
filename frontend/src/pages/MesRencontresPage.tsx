@@ -260,14 +260,7 @@ export default function MesRencontresPage() {
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">{rencontre.type.name}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {rencontre.section?.name
-                          || (rencontre.scopeType === 'LOCALITE'
-                            ? 'Localité'
-                            : (rencontre.scopeType === 'SOUS_LOCALITE'
-                              ? 'Sous-localité'
-                              : '—'))}
-                      </p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{rencontre.section.name}</p>
                     </div>
                     {!canModify(rencontre) && (
                       <Badge variant="secondary">Lecture seule</Badge>

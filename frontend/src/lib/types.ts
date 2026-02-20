@@ -179,8 +179,8 @@ export interface Rencontre {
   id: string;
   typeId: string;
   type: RencontreType;
-  sectionId: string | null;
-  section: Section | null;
+  sectionId: string;
+  section: Section;
   scopeType: ScopeType;
   scopeId: string;
   lieuMembreId?: string | null;

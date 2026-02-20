@@ -79,14 +79,7 @@ export default function PrintRencontrePage() {
               <Badge variant={rencontre.type.isReunion ? 'default' : 'accent'}>
                 {rencontre.type.name}
               </Badge>
-              <Badge variant="secondary">
-                {rencontre.section?.name
-                  || (rencontre.scopeType === 'LOCALITE'
-                    ? 'Localité'
-                    : (rencontre.scopeType === 'SOUS_LOCALITE'
-                      ? 'Sous-localité'
-                      : '—'))}
-              </Badge>
+              <Badge variant="secondary">{rencontre.section.name}</Badge>
             </div>
             {rencontre.theme && (
               <h2 className="text-2xl font-bold text-gray-900 mt-2">{rencontre.theme}</h2>

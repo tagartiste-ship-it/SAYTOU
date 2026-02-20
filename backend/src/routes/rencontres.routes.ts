@@ -75,13 +75,7 @@ router.post(
 
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: {
-          localiteId: true,
-          sectionId: true,
-          sousLocaliteId: true,
-          sousLocalite: { select: { localiteId: true } },
-          section: { select: { sousLocalite: { select: { localiteId: true } } } },
-        },
+        select: { sectionId: true, sousLocaliteId: true },
       });
 
       if (!user) {
@@ -106,27 +100,35 @@ router.post(
         // SOUS_LOCALITE crée pour sa sous-localité
         scopeType = 'SOUS_LOCALITE';
         scopeId = user.sousLocaliteId;
-
-        // Rencontre de sous-localité: pas de section
-        finalSectionId = null;
-      } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
-        const localiteId =
-          (user as any)?.localiteId
-          || (user as any)?.sousLocalite?.localiteId
-          || (user as any)?.section?.sousLocalite?.localiteId
-          || null;
-
-        if (!localiteId) {
-          res.status(400).json({ error: "Votre compte n'est pas associé à une localité" });
+        
+        // La section est obligatoire et doit appartenir à sa sous-localité
+        if (!sectionId) {
+          res.status(400).json({ error: 'La section est obligatoire' });
           return;
         }
 
+        const section = await prisma.section.findUnique({
+          where: { id: sectionId },
+          select: { sousLocaliteId: true },
+        });
+
+        if (section?.sousLocaliteId !== user.sousLocaliteId) {
+          res.status(403).json({ error: 'Cette section n\'appartient pas à votre sous-localité' });
+          return;
+        }
+        
+        finalSectionId = sectionId;
+      } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
         // LOCALITE / COMITE_PEDAGOGIQUE crée pour la localité
         scopeType = 'LOCALITE';
-        scopeId = localiteId;
-
-        // Rencontre de localité: pas de section
-        finalSectionId = null;
+        scopeId = 'LOCALITE';
+        
+        if (!sectionId) {
+          res.status(400).json({ error: 'La section est obligatoire' });
+          return;
+        }
+        
+        finalSectionId = sectionId;
       } else {
         res.status(403).json({ error: 'Rôle non autorisé' });
         return;
@@ -372,13 +374,7 @@ router.get(
       // Filtrer selon le rôle et le scope
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: {
-          localiteId: true,
-          sectionId: true,
-          sousLocaliteId: true,
-          sousLocalite: { select: { localiteId: true } },
-          section: { select: { sousLocalite: { select: { localiteId: true } } } },
-        },
+        select: { sectionId: true, sousLocaliteId: true },
       });
 
       if (role === 'SECTION_USER') {
@@ -414,53 +410,16 @@ router.get(
         if (sectionId) {
           if (sectionIds.includes(sectionId as string)) {
             delete where.OR;
-            where.scopeType = 'SECTION';
-            where.scopeId = sectionId as string;
+            where.sectionId = sectionId as string;
           } else {
             res.status(403).json({ error: 'Accès non autorisé à cette section' });
             return;
           }
         }
       } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
-        const localiteId =
-          (user as any)?.localiteId
-          || (user as any)?.sousLocalite?.localiteId
-          || (user as any)?.section?.sousLocalite?.localiteId
-          || null;
-
-        if (!localiteId) {
-          res.json({ rencontres: [], total: 0, page: pageNum, totalPages: 0 });
-          return;
-        }
-
-        const sousLocalites = await prisma.sousLocalite.findMany({
-          where: { localiteId },
-          select: { id: true },
-        });
-        const sousLocaliteIds = sousLocalites.map((sl) => sl.id);
-
-        const sections = await prisma.section.findMany({
-          where: { sousLocaliteId: { in: sousLocaliteIds } },
-          select: { id: true },
-        });
-        const sectionIds = sections.map((s) => s.id);
-
-        where.OR = [
-          { scopeType: 'LOCALITE', scopeId: localiteId },
-          { scopeType: 'SOUS_LOCALITE', scopeId: { in: sousLocaliteIds } },
-          { scopeType: 'SECTION', scopeId: { in: sectionIds } },
-        ];
-
-        // Filtrer par section si demandé (uniquement si section dans la localité)
+        // LOCALITE / COMITE_PEDAGOGIQUE voit tout
         if (sectionId) {
-          if (sectionIds.includes(sectionId as string)) {
-            delete where.OR;
-            where.scopeType = 'SECTION';
-            where.scopeId = sectionId as string;
-          } else {
-            res.status(403).json({ error: 'Accès non autorisé à cette section' });
-            return;
-          }
+          where.sectionId = sectionId as string;
         }
       }
 
@@ -579,7 +538,7 @@ router.get(
           select: { sectionId: true },
         });
 
-        if (rencontre.scopeType !== 'SECTION' || user?.sectionId !== rencontre.scopeId) {
+        if (user?.sectionId !== rencontre.sectionId) {
           res.status(403).json({ error: 'Accès non autorisé' });
           return;
         }
@@ -589,63 +548,7 @@ router.get(
           select: { sousLocaliteId: true },
         });
 
-        const actorSousLocaliteId = user?.sousLocaliteId || null;
-        if (!actorSousLocaliteId) {
-          res.status(403).json({ error: 'Accès non autorisé' });
-          return;
-        }
-
-        // Accès à ses propres rencontres sous-localité
-        if (rencontre.scopeType === 'SOUS_LOCALITE' && rencontre.scopeId === actorSousLocaliteId) {
-          // ok
-        } else if (rencontre.scopeType === 'SECTION') {
-          // Accès aux rencontres des sections de sa sous-localité
-          const sectionSousLocaliteId = (rencontre as any)?.section?.sousLocaliteId || null;
-          if (sectionSousLocaliteId !== actorSousLocaliteId) {
-            res.status(403).json({ error: 'Accès non autorisé' });
-            return;
-          }
-        } else {
-          res.status(403).json({ error: 'Accès non autorisé' });
-          return;
-        }
-      } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
-        const actor = await prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            localiteId: true,
-            sousLocalite: { select: { localiteId: true } },
-            section: { select: { sousLocalite: { select: { localiteId: true } } } },
-          },
-        });
-
-        const actorLocaliteId =
-          (actor as any)?.localiteId
-          || (actor as any)?.sousLocalite?.localiteId
-          || (actor as any)?.section?.sousLocalite?.localiteId
-          || null;
-
-        if (!actorLocaliteId) {
-          res.status(403).json({ error: 'Accès non autorisé' });
-          return;
-        }
-
-        // Calculer la localité de la rencontre selon son scope
-        let rencontreLocaliteId: string | null = null;
-        if (rencontre.scopeType === 'LOCALITE') {
-          rencontreLocaliteId = rencontre.scopeId;
-        } else if (rencontre.scopeType === 'SOUS_LOCALITE') {
-          const sl = await prisma.sousLocalite.findUnique({
-            where: { id: rencontre.scopeId },
-            select: { localiteId: true },
-          });
-          rencontreLocaliteId = sl?.localiteId || null;
-        } else if (rencontre.scopeType === 'SECTION') {
-          const localiteId = (rencontre as any)?.section?.sousLocalite?.localiteId || null;
-          rencontreLocaliteId = localiteId;
-        }
-
-        if (rencontreLocaliteId !== actorLocaliteId) {
+        if (user?.sousLocaliteId !== rencontre.section.sousLocaliteId) {
           res.status(403).json({ error: 'Accès non autorisé' });
           return;
         }
@@ -697,13 +600,7 @@ router.put(
       // Vérifier les permissions basées sur le scope
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: {
-          localiteId: true,
-          sectionId: true,
-          sousLocaliteId: true,
-          sousLocalite: { select: { localiteId: true } },
-          section: { select: { sousLocalite: { select: { localiteId: true } } } },
-        },
+        select: { sectionId: true, sousLocaliteId: true },
       });
 
       if (!user) {
@@ -731,18 +628,7 @@ router.put(
           return;
         }
       } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
-        const localiteId =
-          (user as any)?.localiteId
-          || (user as any)?.sousLocalite?.localiteId
-          || (user as any)?.section?.sousLocalite?.localiteId
-          || null;
-
-        if (!localiteId) {
-          res.status(403).json({ error: 'Vous ne pouvez modifier que vos propres rencontres' });
-          return;
-        }
-
-        if (existingRencontre.scopeType !== 'LOCALITE' || existingRencontre.scopeId !== localiteId) {
+        if (existingRencontre.scopeType !== 'LOCALITE') {
           res.status(403).json({ error: 'Vous ne pouvez modifier que vos propres rencontres' });
           return;
         }
@@ -883,13 +769,7 @@ router.delete(
       // Vérifier les permissions basées sur le scope
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: {
-          localiteId: true,
-          sectionId: true,
-          sousLocaliteId: true,
-          sousLocalite: { select: { localiteId: true } },
-          section: { select: { sousLocalite: { select: { localiteId: true } } } },
-        },
+        select: { sectionId: true, sousLocaliteId: true },
       });
 
       if (!user) {
@@ -917,18 +797,7 @@ router.delete(
           return;
         }
       } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
-        const localiteId =
-          (user as any)?.localiteId
-          || (user as any)?.sousLocalite?.localiteId
-          || (user as any)?.section?.sousLocalite?.localiteId
-          || null;
-
-        if (!localiteId) {
-          res.status(403).json({ error: 'Vous ne pouvez supprimer que vos propres rencontres' });
-          return;
-        }
-
-        if (rencontre.scopeType !== 'LOCALITE' || rencontre.scopeId !== localiteId) {
+        if (rencontre.scopeType !== 'LOCALITE') {
           res.status(403).json({ error: 'Vous ne pouvez supprimer que vos propres rencontres' });
           return;
         }
