@@ -118,6 +118,24 @@ export default function EditRencontrePage() {
   }, [id]);
 
   useEffect(() => {
+    if (isGroupedPresence) {
+      const fetchMembresForScope = async () => {
+        try {
+          const membresRes = await api.get<{ membres: Membre[] }>('/membres', {
+            params: { limit: 1000 },
+          });
+          setMembres(membresRes.data.membres || []);
+          setMembresPresence(membresRes.data.membres || []);
+        } catch {
+          setMembres([]);
+          setMembresPresence([]);
+        }
+      };
+
+      fetchMembresForScope();
+      return;
+    }
+
     if (user?.role === 'SECTION_USER') return;
     if (!formData.sectionId) {
       setMembres([]);
@@ -147,7 +165,7 @@ export default function EditRencontrePage() {
 
     fetchMembresForSection();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.sectionId, user?.role]);
+  }, [formData.sectionId, user?.role, isGroupedPresence]);
 
   useEffect(() => {
     if (isGroupedPresence) {
@@ -229,7 +247,7 @@ export default function EditRencontrePage() {
       // Remplir le formulaire avec les données existantes
       setFormData({
         typeId: rencontre.typeId,
-        sectionId: rencontre.sectionId,
+        sectionId: String(rencontre.sectionId ?? ''),
         date: new Date(rencontre.date).toISOString().split('T')[0],
         heureDebut: rencontre.heureDebut,
         heureFin: rencontre.heureFin,
@@ -341,7 +359,7 @@ export default function EditRencontrePage() {
       return;
     }
 
-    if (!formData.sectionId) {
+    if (!isGroupedPresence && !formData.sectionId) {
       toast.error('Veuillez sélectionner une section');
       return;
     }
@@ -353,6 +371,7 @@ export default function EditRencontrePage() {
 
       const payload = {
         ...formData,
+        sectionId: isGroupedPresence ? null : formData.sectionId,
         presenceHomme: Number(formData.presenceHomme),
         presenceFemme: Number(formData.presenceFemme),
         presenceTotale: Number(formData.presenceHomme) + Number(formData.presenceFemme),
@@ -452,7 +471,7 @@ export default function EditRencontrePage() {
               </select>
             </div>
 
-            {user?.role !== 'SECTION_USER' && (
+            {user?.role !== 'SECTION_USER' && !isGroupedPresence && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Section *</label>
                 <select

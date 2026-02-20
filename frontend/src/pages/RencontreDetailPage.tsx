@@ -128,7 +128,12 @@ export default function RencontreDetailPage() {
                 {rencontre.type.name}
               </Badge>
               <Badge variant="secondary">
-                {rencontre.section.name}
+                {rencontre.section?.name
+                  || (rencontre.scopeType === 'LOCALITE'
+                    ? 'Localité'
+                    : (rencontre.scopeType === 'SOUS_LOCALITE'
+                      ? 'Sous-localité'
+                      : '—'))}
               </Badge>
             </div>
             {rencontre.theme && (

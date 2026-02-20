@@ -274,6 +274,18 @@ export default function CreateRencontrePage() {
         } catch {
           setSectionsInfo([]);
         }
+
+        // Charger les membres (pour le lieu) dans le scope
+        try {
+          const membresRes = await api.get<{ membres: Membre[] }>('/membres', {
+            params: { limit: 1000 },
+          });
+          setMembres(membresRes.data.membres || []);
+          setMembresPresence(membresRes.data.membres || []);
+        } catch {
+          setMembres([]);
+          setMembresPresence([]);
+        }
       } else {
         // Charger les membres (section user: sa section; admin: section sélectionnée)
         const membresRes = await api.get<{ membres: Membre[] }>('/membres', {
@@ -311,6 +323,7 @@ export default function CreateRencontrePage() {
   useEffect(() => {
     if (!hasRestoredDraft) return;
     if (user?.role === 'SECTION_USER') return;
+    if (isGroupedPresence) return;
     if (!formData.sectionId) {
       setMembres([]);
       setMembresPresents([]);
@@ -406,7 +419,7 @@ export default function CreateRencontrePage() {
       return;
     }
 
-    if (!formData.sectionId) {
+    if (!isGroupedPresence && !formData.sectionId) {
       if (user?.role === 'SECTION_USER') {
         toast.error('Section non définie. Veuillez contacter l\'administrateur');
       } else {
@@ -425,7 +438,7 @@ export default function CreateRencontrePage() {
 
       const payload = {
         typeId: formData.typeId,
-        sectionId: formData.sectionId,
+        sectionId: isGroupedPresence ? null : formData.sectionId,
         date: formData.date,
         heureDebut: formData.heureDebut,
         heureFin: formData.heureFin,
@@ -573,8 +586,8 @@ export default function CreateRencontrePage() {
               />
             </div>
 
-            {/* Afficher le champ Section uniquement pour les admins */}
-            {user?.role !== 'SECTION_USER' && (
+            {/* Afficher le champ Section uniquement si nécessaire */}
+            {user?.role !== 'SECTION_USER' && !isGroupedPresence && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Section *</label>
                 <select
