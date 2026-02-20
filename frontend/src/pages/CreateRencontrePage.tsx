@@ -413,6 +413,11 @@ export default function CreateRencontrePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!user) {
+      toast.error('Utilisateur non chargé. Veuillez réessayer.');
+      return;
+    }
     
     if (!formData.typeId) {
       toast.error('Veuillez sélectionner un type de rencontre');
@@ -420,7 +425,7 @@ export default function CreateRencontrePage() {
     }
 
     if (!isGroupedPresence && !formData.sectionId) {
-      if (user?.role === 'SECTION_USER') {
+      if (user.role === 'SECTION_USER') {
         toast.error('Section non définie. Veuillez contacter l\'administrateur');
       } else {
         toast.error('Veuillez sélectionner une section');
@@ -587,7 +592,7 @@ export default function CreateRencontrePage() {
             </div>
 
             {/* Afficher le champ Section uniquement si nécessaire */}
-            {user?.role !== 'SECTION_USER' && !isGroupedPresence && (
+            {user && user.role !== 'SECTION_USER' && !isGroupedPresence && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Section *</label>
                 <select
