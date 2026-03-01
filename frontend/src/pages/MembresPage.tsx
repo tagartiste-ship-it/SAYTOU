@@ -51,6 +51,7 @@ export default function MembresPage() {
     prenom: '',
     nom: '',
     genre: '',
+    etat: 'ACTIF',
     fonction: '',
     corpsMetier: '',
     groupeSanguin: '',
@@ -230,6 +231,7 @@ export default function MembresPage() {
       prenom: '',
       nom: '',
       genre: '',
+      etat: 'ACTIF',
       fonction: '',
       corpsMetier: '',
       groupeSanguin: '',
@@ -250,6 +252,7 @@ export default function MembresPage() {
       prenom: membre.prenom,
       nom: membre.nom,
       genre: membre.genre || '',
+      etat: membre.etat || 'ACTIF',
       fonction: membre.fonction || '',
       corpsMetier: membre.corpsMetier || '',
       groupeSanguin: membre.groupeSanguin || '',
@@ -272,6 +275,7 @@ export default function MembresPage() {
       prenom: '',
       nom: '',
       genre: '',
+      etat: 'ACTIF',
       fonction: '',
       corpsMetier: '',
       groupeSanguin: '',
@@ -656,6 +660,21 @@ export default function MembresPage() {
                         <option value="FEMME">Femme</option>
                       </select>
                     </div>
+
+                    <div>
+                      <label className="label text-gray-700 dark:text-gray-300">État de membre</label>
+                      <select
+                        value={(formData as any).etat}
+                        onChange={(e) => setFormData({ ...(formData as any), etat: e.target.value })}
+                        className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                      >
+                        <option value="ACTIF">Actif</option>
+                        <option value="VOYAGE">En voyage</option>
+                        <option value="MALADE">Malade</option>
+                        <option value="MORT">Mort</option>
+                        <option value="ABANDONNE">Abandonné</option>
+                      </select>
+                    </div>
                     <div>
                       <label className="label text-gray-700 dark:text-gray-300">Fonction</label>
                       <Input
@@ -1008,6 +1027,14 @@ export default function MembresPage() {
                                 {membre.prenom} {membre.nom}
                               </h3>
                               <div className="flex gap-2 mt-1">
+                                {membre.isActive === false ? (
+                                  <Badge variant="danger">Inactif</Badge>
+                                ) : (
+                                  <Badge variant="success">Actif</Badge>
+                                )}
+                                {membre.etat && membre.etat !== 'ACTIF' ? (
+                                  <Badge variant="secondary">{membre.etat}</Badge>
+                                ) : null}
                                 {membre.fonction && (
                                   <Badge variant="default">
                                     <Briefcase className="w-3 h-3 mr-1" />

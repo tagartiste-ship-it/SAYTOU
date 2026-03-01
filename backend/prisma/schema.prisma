@@ -28,6 +28,14 @@ enum ScopeType {
   SECTION
 }
 
+enum MembreEtat {
+  ACTIF
+  VOYAGE
+  MALADE
+  MORT
+  ABANDONNE
+}
+
 enum BureauScopeType {
   LOCALITE
   SOUS_LOCALITE
@@ -317,6 +325,10 @@ model Membre {
   dateAdhesion        DateTime? @map("date_adhesion")
   numeroCarteElecteur String?   @map("numero_carte_electeur")
   lieuVote            String?   @map("lieu_vote")
+  etat                MembreEtat @default(ACTIF)
+  etatUpdatedAt       DateTime? @map("etat_updated_at")
+  goudiAbsenceStreak  Int       @default(0) @map("goudi_absence_streak")
+  lastPresenceAt      DateTime? @map("last_presence_at")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 

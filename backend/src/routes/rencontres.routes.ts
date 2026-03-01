@@ -6,6 +6,73 @@ const router: any = express.Router();
 
 const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+const normalizeLoose = (value: unknown): string => {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const updateMemberPresenceStats = async (args: { sectionId: string; typeId: string; date: Date; membresPresents: unknown }) => {
+  const presentIds = Array.isArray(args.membresPresents)
+    ? Array.from(new Set((args.membresPresents as any[]).map((x) => String(x)).filter(Boolean)))
+    : [];
+
+  if (presentIds.length) {
+    await prisma.membre.updateMany({
+      where: { id: { in: presentIds } },
+      data: { lastPresenceAt: args.date },
+    });
+
+    await prisma.membre.updateMany({
+      where: { id: { in: presentIds }, etat: { in: ['VOYAGE', 'MALADE'] as any } },
+      data: { etat: 'ACTIF' as any, etatUpdatedAt: new Date() },
+    });
+  }
+
+  const type = await prisma.rencontreType.findUnique({
+    where: { id: args.typeId },
+    select: { name: true },
+  });
+  const isGoudiAldjouma = normalizeLoose(type?.name) === normalizeLoose('Goudi Aldjouma');
+  if (!isGoudiAldjouma) return;
+
+  const recent = await prisma.rencontre.findMany({
+    where: { sectionId: args.sectionId, typeId: args.typeId },
+    select: { id: true, membresPresents: true, date: true, createdAt: true },
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+    take: 3,
+  });
+
+  const membres = await prisma.membre.findMany({
+    where: { sectionId: args.sectionId, ageTranche: 'S3' },
+    select: { id: true },
+  });
+
+  const updates = membres.map((m) => {
+    let streak = 0;
+    for (const r of recent) {
+      const p = Array.isArray(r.membresPresents) ? (r.membresPresents as any[]) : [];
+      const set = new Set(p.map((x) => String(x)));
+      if (set.has(m.id)) break;
+      streak += 1;
+      if (streak >= 3) break;
+    }
+    return prisma.membre.update({
+      where: { id: m.id },
+      data: { goudiAbsenceStreak: streak },
+    });
+  });
+
+  if (updates.length) {
+    await prisma.$transaction(updates);
+  }
+};
+
 const isWithinEditWindow = (createdAt: Date) => {
   const createdAtMs = createdAt instanceof Date ? createdAt.getTime() : new Date(createdAt).getTime();
   return Date.now() - createdAtMs <= EDIT_WINDOW_MS;
@@ -193,6 +260,13 @@ router.post(
             },
           },
         },
+      });
+
+      await updateMemberPresenceStats({
+        sectionId: finalSectionId,
+        typeId,
+        date: new Date(date),
+        membresPresents,
       });
 
       res.status(201).json({

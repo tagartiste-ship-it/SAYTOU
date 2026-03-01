@@ -154,6 +154,8 @@ export interface Membre {
     id: string;
     name: string;
   };
+  etat?: 'ACTIF' | 'VOYAGE' | 'MALADE' | 'MORT' | 'ABANDONNE';
+  isActive?: boolean;
   photo?: string;
   prenom: string;
   nom: string;

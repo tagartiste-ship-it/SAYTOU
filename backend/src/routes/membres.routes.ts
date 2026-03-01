@@ -8,6 +8,111 @@ const prisma: any = prismaRaw;
 
 type AgeTranche = 'S1' | 'S2' | 'S3' | null;
 
+type MembreEtat = 'ACTIF' | 'VOYAGE' | 'MALADE' | 'MORT' | 'ABANDONNE';
+
+const isValidMembreEtat = (value: unknown): value is MembreEtat => {
+  return value === 'ACTIF' || value === 'VOYAGE' || value === 'MALADE' || value === 'MORT' || value === 'ABANDONNE';
+};
+
+const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+
+const computeIsActive = (m: { etat?: MembreEtat | null; ageTranche?: string | null; goudiAbsenceStreak?: number | null; lastPresenceAt?: Date | null }) => {
+  const etat = (m.etat ?? 'ACTIF') as MembreEtat;
+  if (etat === 'MORT' || etat === 'ABANDONNE' || etat === 'VOYAGE') return false;
+
+  const tranche = normalizeAgeTranche(m.ageTranche);
+  if (tranche === 'S3') {
+    return (Number(m.goudiAbsenceStreak ?? 0) || 0) < 3;
+  }
+
+  // S1/S2: inactif si aucune présence enregistrée depuis 1 mois
+  const lp = m.lastPresenceAt instanceof Date ? m.lastPresenceAt : (m.lastPresenceAt ? new Date(m.lastPresenceAt) : null);
+  if (!lp || Number.isNaN(lp.getTime())) return false;
+  return Date.now() - lp.getTime() <= ONE_MONTH_MS;
+};
+
+const buildActiveWhere = (baseWhere: any) => {
+  const since = new Date(Date.now() - ONE_MONTH_MS);
+  return {
+    AND: [
+      baseWhere,
+      { etat: { notIn: ['MORT', 'ABANDONNE', 'VOYAGE'] as any } },
+      {
+        OR: [
+          {
+            AND: [
+              { ageTranche: 'S3' },
+              { goudiAbsenceStreak: { lt: 3 } },
+            ],
+          },
+          {
+            AND: [
+              { ageTranche: { in: ['S1', 'S2'] } },
+              { lastPresenceAt: { gte: since } },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+};
+
+const getActionSocialeRecipientIds = async (sectionId: string) => {
+  const def = await prisma.orgUnitDefinition.findFirst({
+    where: { kind: 'CELLULE' as any, code: 'ACTION_SOCIALE' },
+    select: { id: true },
+  });
+  if (!def?.id) return [] as string[];
+
+  const sectionInstance = await prisma.orgUnitInstance.findFirst({
+    where: {
+      definitionId: def.id,
+      scopeType: 'SECTION' as any,
+      scopeId: sectionId,
+      isVisible: true,
+    },
+    select: { id: true },
+  });
+
+  const sectionRecipientIds = sectionInstance?.id
+    ? (
+        await prisma.orgUnitAssignment.findMany({
+          where: { instanceId: sectionInstance.id },
+          select: { userId: true },
+        })
+      ).map((x) => x.userId)
+    : [];
+
+  const sectionRow = await prisma.section.findUnique({
+    where: { id: sectionId },
+    select: { sousLocalite: { select: { localiteId: true } } },
+  });
+  const localiteId = (sectionRow as any)?.sousLocalite?.localiteId as string | null | undefined;
+
+  const localiteInstance = localiteId
+    ? await prisma.orgUnitInstance.findFirst({
+        where: {
+          definitionId: def.id,
+          scopeType: 'LOCALITE' as any,
+          scopeId: localiteId,
+          isVisible: true,
+        },
+        select: { id: true },
+      })
+    : null;
+
+  const localiteRecipientIds = localiteInstance?.id
+    ? (
+        await prisma.orgUnitAssignment.findMany({
+          where: { instanceId: localiteInstance.id },
+          select: { userId: true },
+        })
+      ).map((x) => x.userId)
+    : [];
+
+  return Array.from(new Set([...sectionRecipientIds, ...localiteRecipientIds]));
+};
+
 const normalizeAgeTranche = (value: unknown): AgeTranche => {
   const v = String(value ?? '').trim().toUpperCase();
   if (v === 'S1' || v === 'S2' || v === 'S3') return v as AgeTranche;
@@ -831,10 +936,17 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const whereHommes = whereAnd.length > 0 ? { AND: [...whereAnd, { genre: 'HOMME' }] } : { genre: 'HOMME' };
     const whereFemmes = whereAnd.length > 0 ? { AND: [...whereAnd, { genre: 'FEMME' }] } : { genre: 'FEMME' };
 
-    const [total, totalHommes, totalFemmes, membres] = await Promise.all([
+    const whereActive = buildActiveWhere(where);
+    const whereActiveHommes = buildActiveWhere(whereHommes);
+    const whereActiveFemmes = buildActiveWhere(whereFemmes);
+
+    const [total, totalHommes, totalFemmes, totalActive, totalActiveHommes, totalActiveFemmes, membres] = await Promise.all([
       prisma.membre.count({ where }),
       prisma.membre.count({ where: whereHommes }),
       prisma.membre.count({ where: whereFemmes }),
+      prisma.membre.count({ where: whereActive }),
+      prisma.membre.count({ where: whereActiveHommes }),
+      prisma.membre.count({ where: whereActiveFemmes }),
       prisma.membre.findMany({
         where,
         skip,
@@ -856,20 +968,27 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const membresEnrichis = membres.map((m: any) => {
       const age = computeAge(m.dateNaissance);
       const ageTranche = normalizeAgeTranche(m.ageTranche) ?? computeAgeTranche(age);
+      const isActive = computeIsActive({
+        etat: m.etat,
+        ageTranche,
+        goudiAbsenceStreak: m.goudiAbsenceStreak,
+        lastPresenceAt: m.lastPresenceAt,
+      });
       return {
         ...m,
         age,
         isEligibleToVote: age !== null ? age >= 18 : ageTranche === 'S3',
         ageTranche,
+        isActive,
       };
     });
 
     res.json({
       membres: membresEnrichis,
       stats: {
-        total,
-        hommes: totalHommes,
-        femmes: totalFemmes,
+        total: totalActive,
+        hommes: totalActiveHommes,
+        femmes: totalActiveFemmes,
       },
       pagination: {
         total,
@@ -908,6 +1027,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       dateAdhesion,
       numeroCarteElecteur,
       lieuVote,
+      etat,
     } = req.body;
 
     if (!prenom || !nom) {
@@ -942,6 +1062,12 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "ageTranche requise (S1, S2 ou S3)" });
     }
 
+    const computedTranche = normalizeAgeTranche(normalizedAgeTranche) ?? computeAgeTranche(computeAge(dateNaissanceValue as any));
+
+    if (etat !== undefined && !isValidMembreEtat(etat)) {
+      return res.status(400).json({ error: 'etat invalide' });
+    }
+
     const membre = await prisma.membre.create({
       data: {
         sectionId: finalSectionId,
@@ -956,10 +1082,12 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         numeroCNI,
         adresse,
         dateNaissance: dateNaissanceValue,
-        ageTranche: normalizedAgeTranche,
+        ageTranche: computedTranche,
         dateAdhesion: dateAdhesionValue,
         numeroCarteElecteur,
         lieuVote,
+        ...(etat !== undefined ? { etat } : {}),
+        ...(etat !== undefined ? { etatUpdatedAt: new Date() } : {}),
       },
       include: {
         section: {
@@ -972,14 +1100,20 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     });
 
     const age = computeAge(membre.dateNaissance);
-    const computedTranche = computeAgeTranche(age);
-    const finalTranche = normalizeAgeTranche(membre.ageTranche) ?? computedTranche;
+    const finalTranche = normalizeAgeTranche(membre.ageTranche) ?? computeAgeTranche(age);
+    const isActive = computeIsActive({
+      etat: (membre as any).etat,
+      ageTranche: finalTranche,
+      goudiAbsenceStreak: (membre as any).goudiAbsenceStreak,
+      lastPresenceAt: (membre as any).lastPresenceAt,
+    });
     res.status(201).json({
       membre: {
         ...membre,
         age,
         isEligibleToVote: age !== null ? age >= 18 : finalTranche === 'S3',
         ageTranche: finalTranche,
+        isActive,
       },
     });
   } catch (error: any) {
@@ -1008,6 +1142,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       dateAdhesion,
       numeroCarteElecteur,
       lieuVote,
+      etat,
     } = req.body;
     
     // Validation
@@ -1027,6 +1162,16 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "ageTranche requise (S1, S2 ou S3)" });
     }
 
+    const computedTranche = normalizeAgeTranche(normalizedAgeTranche) ?? computeAgeTranche(computeAge(dateNaissanceValue as any));
+
+    if (etat !== undefined && !isValidMembreEtat(etat)) {
+      return res.status(400).json({ error: 'etat invalide' });
+    }
+
+    const before = etat !== undefined
+      ? await prisma.membre.findUnique({ where: { id }, select: { id: true, etat: true, sectionId: true, prenom: true, nom: true } })
+      : null;
+
     const membre = await prisma.membre.update({
       where: { id },
       data: {
@@ -1041,10 +1186,12 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         numeroCNI,
         adresse,
         dateNaissance: dateNaissanceValue,
-        ageTranche: normalizedAgeTranche,
+        ageTranche: computedTranche,
         dateAdhesion: dateAdhesionValue,
         numeroCarteElecteur: numeroCarteElecteur === undefined ? undefined : numeroCarteElecteur,
         lieuVote: lieuVote === undefined ? undefined : lieuVote,
+        ...(etat !== undefined ? { etat } : {}),
+        ...(etat !== undefined ? { etatUpdatedAt: new Date() } : {}),
       },
       include: {
         section: {
@@ -1057,14 +1204,20 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     });
     
     const age = computeAge(membre.dateNaissance);
-    const computedTranche = computeAgeTranche(age);
-    const finalTranche = normalizeAgeTranche(membre.ageTranche) ?? computedTranche;
+    const finalTranche = normalizeAgeTranche(membre.ageTranche) ?? computeAgeTranche(age);
+    const isActive = computeIsActive({
+      etat: (membre as any).etat,
+      ageTranche: finalTranche,
+      goudiAbsenceStreak: (membre as any).goudiAbsenceStreak,
+      lastPresenceAt: (membre as any).lastPresenceAt,
+    });
     res.json({
       membre: {
         ...membre,
         age,
         isEligibleToVote: age !== null ? age >= 18 : finalTranche === 'S3',
         ageTranche: finalTranche,
+        isActive,
       },
     });
   } catch (error: any) {
