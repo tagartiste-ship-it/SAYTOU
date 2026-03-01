@@ -196,7 +196,6 @@ export default function MembresPage() {
       if (numeroCarteElecteurFilter) params.numeroCarteElecteur = numeroCarteElecteurFilter;
       if (statutElecteurFilter) params.statutElecteur = statutElecteurFilter;
       if (ageTrancheFilter) params.ageTranche = ageTrancheFilter;
-      if (activeFilter) params.etat = activeFilter;
       if (dateAdhesionDebutFilter) params.dateAdhesionDebut = dateAdhesionDebutFilter;
       if (dateAdhesionFinFilter) params.dateAdhesionFin = dateAdhesionFinFilter;
 
@@ -487,7 +486,7 @@ export default function MembresPage() {
             </div>
 
             <div>
-              <label className="label text-gray-700 dark:text-gray-300">Statut membre</label>
+              <label className="label text-gray-700 dark:text-gray-300">Actifs</label>
               <select
                 value={activeFilter}
                 onChange={(e) => setActiveFilter(e.target.value as any)}
