@@ -131,7 +131,17 @@ export default function EditRencontrePage() {
           params: { sectionId: formData.sectionId },
         });
         setMembres(membresRes.data.membres || []);
-        setMembresPresence(membresRes.data.membres || []);
+        const onlyActive = (membresRes.data.membres || []).filter((m) => m.isActive !== false);
+        setMembresPresence(onlyActive);
+
+        setMembresPresents((prev) => {
+          const allowed = new Set(onlyActive.map((m) => m.id));
+          return prev.filter((id) => allowed.has(id));
+        });
+        setMembresAbsents((prev) => {
+          const allowed = new Set(onlyActive.map((m) => m.id));
+          return prev.filter((id) => allowed.has(id));
+        });
 
         setFormData((prev) => {
           if (!prev.lieuMembreId) return prev;
@@ -209,7 +219,8 @@ export default function EditRencontrePage() {
         // Charger les membres de la section
         const membresRes = await api.get<{ membres: Membre[] }>('/membres');
         setMembres(membresRes.data.membres || []);
-        setMembresPresence(membresRes.data.membres || []);
+        const onlyActive = (membresRes.data.membres || []).filter((m) => m.isActive !== false);
+        setMembresPresence(onlyActive);
       }
     } catch (error: any) {
       console.error('Erreur détaillée:', error);

@@ -295,7 +295,17 @@ export default function CreateRencontrePage() {
           const membresPresenceRes = await api.get<{ membres: Membre[] }>('/membres', {
             params: presenceParams,
           });
-          setMembresPresence(membresPresenceRes.data.membres || []);
+          const onlyActive = (membresPresenceRes.data.membres || []).filter((m) => m.isActive !== false);
+          setMembresPresence(onlyActive);
+
+          setMembresPresents((prev) => {
+            const allowed = new Set(onlyActive.map((m) => m.id));
+            return prev.filter((id) => allowed.has(id));
+          });
+          setMembresAbsents((prev) => {
+            const allowed = new Set(onlyActive.map((m) => m.id));
+            return prev.filter((id) => allowed.has(id));
+          });
         } else {
           setMembresPresence([]);
         }

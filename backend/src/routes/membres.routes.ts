@@ -402,6 +402,81 @@ router.get('/par-sections', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
+// Mettre à jour uniquement l'état d'un membre
+router.patch('/:id/etat', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { etat } = req.body;
+
+    if (!isValidMembreEtat(etat)) {
+      return res.status(400).json({ error: 'etat invalide' });
+    }
+
+    const before = await prisma.membre.findUnique({ where: { id }, select: { id: true, etat: true, sectionId: true, prenom: true, nom: true } });
+    if (!before) {
+      return res.status(404).json({ error: 'Membre non trouvé' });
+    }
+
+    const membre = await prisma.membre.update({
+      where: { id },
+      data: { etat, etatUpdatedAt: new Date() },
+      include: {
+        section: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    const becameMalade = etat === 'MALADE' && before.etat !== 'MALADE';
+    if (becameMalade) {
+      try {
+        const actorUserId = req.user?.userId;
+        const recipients = await getActionSocialeRecipientIds(before.sectionId);
+        const finalRecipients = actorUserId ? recipients.filter((r) => r !== actorUserId) : recipients;
+        if (finalRecipients.length && actorUserId) {
+          const subject = 'Membre malade';
+          const body = `Le membre ${before.prenom} ${before.nom} a été marqué malade.`;
+          await prisma.message.createMany({
+            data: finalRecipients.map((recipientId) => ({
+              senderId: actorUserId,
+              recipientId,
+              subject,
+              body,
+            })),
+          });
+        }
+      } catch (e) {
+        console.error('Erreur notification membre malade:', e);
+      }
+    }
+
+    const age = computeAge(membre.dateNaissance);
+    const finalTranche = normalizeAgeTranche(membre.ageTranche) ?? computeAgeTranche(age);
+    const isActive = computeIsActive({
+      etat: (membre as any).etat,
+      ageTranche: finalTranche,
+      goudiAbsenceStreak: (membre as any).goudiAbsenceStreak,
+      lastPresenceAt: (membre as any).lastPresenceAt,
+    });
+
+    res.json({
+      membre: {
+        ...membre,
+        age,
+        isEligibleToVote: age !== null ? age >= 18 : finalTranche === 'S3',
+        ageTranche: finalTranche,
+        isActive,
+      },
+    });
+  } catch (error: any) {
+    console.error('Erreur modification etat membre:', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 router.get('/corps-metiers-stats', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const scoped = await buildScopeWhereForCorpsMetier(req);

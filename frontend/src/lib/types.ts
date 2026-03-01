@@ -221,6 +221,7 @@ export interface Rencontre {
 
 export interface Stats {
   totalRencontres: number;
+  activeMemberCount?: number;
   totalPresenceHomme: number;
   totalPresenceFemme: number;
   totalPresence: number;

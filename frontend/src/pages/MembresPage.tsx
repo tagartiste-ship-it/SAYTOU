@@ -35,8 +35,8 @@ export default function MembresPage() {
   const [numeroCNIFilter, setNumeroCNIFilter] = useState('');
   const [numeroCarteElecteurFilter, setNumeroCarteElecteurFilter] = useState('');
   const [statutElecteurFilter, setStatutElecteurFilter] = useState('');
-
   const [ageTrancheFilter, setAgeTrancheFilter] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'TOUS' | 'ACTIFS' | 'INACTIFS'>('TOUS');
   const [dateAdhesionDebutFilter, setDateAdhesionDebutFilter] = useState('');
   const [dateAdhesionFinFilter, setDateAdhesionFinFilter] = useState('');
 
@@ -81,6 +81,8 @@ export default function MembresPage() {
     numeroCNIFilter,
     numeroCarteElecteurFilter,
     statutElecteurFilter,
+    ageTrancheFilter,
+    activeFilter,
     dateAdhesionDebutFilter,
     dateAdhesionFinFilter,
   ]);
@@ -100,6 +102,7 @@ export default function MembresPage() {
     numeroCarteElecteurFilter,
     statutElecteurFilter,
     ageTrancheFilter,
+    activeFilter,
     dateAdhesionDebutFilter,
     dateAdhesionFinFilter,
   ]);
@@ -193,6 +196,7 @@ export default function MembresPage() {
       if (numeroCarteElecteurFilter) params.numeroCarteElecteur = numeroCarteElecteurFilter;
       if (statutElecteurFilter) params.statutElecteur = statutElecteurFilter;
       if (ageTrancheFilter) params.ageTranche = ageTrancheFilter;
+      if (activeFilter) params.etat = activeFilter;
       if (dateAdhesionDebutFilter) params.dateAdhesionDebut = dateAdhesionDebutFilter;
       if (dateAdhesionFinFilter) params.dateAdhesionFin = dateAdhesionFinFilter;
 
@@ -347,8 +351,19 @@ export default function MembresPage() {
     setNumeroCarteElecteurFilter('');
     setStatutElecteurFilter('');
     setAgeTrancheFilter('');
+    setActiveFilter('TOUS');
     setDateAdhesionDebutFilter('');
     setDateAdhesionFinFilter('');
+  };
+
+  const handleEtatQuickChange = async (membreId: string, etat: string) => {
+    try {
+      await api.patch(`/membres/${membreId}/etat`, { etat });
+      toast.success("État mis à jour");
+      fetchMembres();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Erreur lors de la mise à jour');
+    }
   };
 
   const containerVariants = {
@@ -367,9 +382,18 @@ export default function MembresPage() {
   const membresHommes = membres.filter((membre) => membre.genre === 'HOMME');
   const membresFemmes = membres.filter((membre) => membre.genre === 'FEMME');
   const membresSansGenre = membres.filter((membre) => !membre.genre);
-  const totalMembres = stats?.total ?? membres.length;
-  const totalHommes = stats?.hommes ?? membresHommes.length;
-  const totalFemmes = stats?.femmes ?? membresFemmes.length;
+
+  const filterByActive = (list: Membre[]) => {
+    if (activeFilter === 'ACTIFS') return list.filter((m) => m.isActive !== false);
+    if (activeFilter === 'INACTIFS') return list.filter((m) => m.isActive === false);
+    return list;
+  };
+
+  const membresHommesFiltered = filterByActive(membresHommes);
+  const membresFemmesFiltered = filterByActive(membresFemmes);
+  const totalMembres = stats?.total ?? membres.filter((m) => m.isActive !== false).length;
+  const totalHommes = stats?.hommes ?? membresHommes.filter((m) => m.isActive !== false).length;
+  const totalFemmes = stats?.femmes ?? membresFemmes.filter((m) => m.isActive !== false).length;
 
   const isElecteurMode = Boolean(statutElecteurFilter);
 
@@ -459,6 +483,19 @@ export default function MembresPage() {
                 <option value="S1">S1 (moins de 12 ans)</option>
                 <option value="S2">S2 (12-17 ans)</option>
                 <option value="S3">S3 (18 ans et +)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label text-gray-700 dark:text-gray-300">Statut membre</label>
+              <select
+                value={activeFilter}
+                onChange={(e) => setActiveFilter(e.target.value as any)}
+                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+              >
+                <option value="TOUS">Tous</option>
+                <option value="ACTIFS">Actifs</option>
+                <option value="INACTIFS">Inactifs</option>
               </select>
             </div>
 
@@ -851,13 +888,13 @@ export default function MembresPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               {/* Colonne Hommes */}
               <div className="space-y-3">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Hommes ({totalHommes})</h2>
-                {membresHommes.length === 0 && (
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Hommes ({membresHommesFiltered.length})</h2>
+                {membresHommesFiltered.length === 0 && (
                   <Card className="p-6 text-center text-gray-500 dark:text-gray-400">
                     Aucun homme enregistré
                   </Card>
                 )}
-                {membresHommes.map((membre, index) => (
+                {membresHommesFiltered.map((membre, index) => (
                   <motion.div
                     key={membre.id}
                     variants={itemVariants}
@@ -1032,9 +1069,18 @@ export default function MembresPage() {
                                 ) : (
                                   <Badge variant="success">Actif</Badge>
                                 )}
-                                {membre.etat && membre.etat !== 'ACTIF' ? (
-                                  <Badge variant="secondary">{membre.etat}</Badge>
-                                ) : null}
+                                <select
+                                  value={membre.etat || 'ACTIF'}
+                                  onChange={(e) => handleEtatQuickChange(membre.id, e.target.value)}
+                                  className="h-7 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 text-xs text-gray-900 dark:text-gray-100"
+                                  disabled={isReadOnly}
+                                >
+                                  <option value="ACTIF">Actif</option>
+                                  <option value="VOYAGE">Voyage</option>
+                                  <option value="MALADE">Malade</option>
+                                  <option value="MORT">Mort</option>
+                                  <option value="ABANDONNE">Abandonné</option>
+                                </select>
                                 {membre.fonction && (
                                   <Badge variant="default">
                                     <Briefcase className="w-3 h-3 mr-1" />
@@ -1122,13 +1168,13 @@ export default function MembresPage() {
 
             {/* Colonne Femmes */}
             <div className="space-y-3">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Femmes ({totalFemmes})</h2>
-              {membresFemmes.length === 0 && (
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Femmes ({membresFemmesFiltered.length})</h2>
+              {membresFemmesFiltered.length === 0 && (
                 <Card className="p-6 text-center text-gray-500 dark:text-gray-400">
                   Aucune femme enregistrée
                 </Card>
               )}
-              {membresFemmes.map((membre, index) => (
+              {membresFemmesFiltered.map((membre, index) => (
                 <motion.div
                   key={membre.id}
                   variants={itemVariants}

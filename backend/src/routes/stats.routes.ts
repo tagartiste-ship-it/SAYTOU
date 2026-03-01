@@ -4,6 +4,34 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
+const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+
+const buildActiveMemberWhere = (baseWhere: any) => {
+  const since = new Date(Date.now() - ONE_MONTH_MS);
+  return {
+    AND: [
+      baseWhere,
+      { etat: { notIn: ['MORT', 'ABANDONNE', 'VOYAGE'] as any } },
+      {
+        OR: [
+          {
+            AND: [
+              { ageTranche: 'S3' },
+              { goudiAbsenceStreak: { lt: 3 } },
+            ],
+          },
+          {
+            AND: [
+              { ageTranche: { in: ['S1', 'S2'] } },
+              { lastPresenceAt: { gte: since } },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+};
+
 const getDateRangeFilter = (req: AuthRequest) => {
   const dateDebutRaw = req.query.dateDebut as string | undefined;
   const dateFinRaw = req.query.dateFin as string | undefined;
@@ -107,6 +135,10 @@ router.get(
       const { userId, role } = req.user!;
 
       const dateWhere = getDateRangeFilter(req);
+
+      const activeMemberCount = await prisma.membre.count({
+        where: buildActiveMemberWhere({ sectionId: id }),
+      });
 
       // Vérifier les permissions
       if (role === 'SECTION_USER') {
@@ -222,6 +254,7 @@ router.get(
           },
         }),
         statistiques: {
+          activeMemberCount,
           totalRencontres,
           totalPresenceHomme,
           totalPresenceFemme,
@@ -280,6 +313,10 @@ router.get(
       });
 
       const sectionIds = sections.map((s: any) => s.id);
+
+      const activeMemberCount = await prisma.membre.count({
+        where: buildActiveMemberWhere({ sectionId: { in: sectionIds } }),
+      });
 
       // Statistiques globales
       const totalRencontres = await prisma.rencontre.count({
@@ -385,6 +422,7 @@ router.get(
         }),
         statistiques: {
           nombreSections: sections.length,
+          activeMemberCount,
           totalRencontres,
           totalPresenceHomme,
           totalPresenceFemme,
@@ -432,6 +470,10 @@ router.get(
       const totalSections = await prisma.section.count();
       const totalRencontres = await prisma.rencontre.count({ where: { ...dateWhere } });
       const totalUtilisateurs = await prisma.user.count();
+
+      const activeMemberCount = await prisma.membre.count({
+        where: buildActiveMemberWhere({}),
+      });
 
       const rencontres = await prisma.rencontre.findMany({
         where: { ...dateWhere },
@@ -499,6 +541,7 @@ router.get(
           totalSections,
           totalRencontres,
           totalUtilisateurs,
+          activeMemberCount,
           totalPresenceHomme,
           totalPresenceFemme,
           totalPresence,
