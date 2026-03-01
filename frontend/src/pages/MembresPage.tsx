@@ -1076,7 +1076,7 @@ export default function MembresPage() {
                                   disabled={isReadOnly}
                                 >
                                   <option value="ACTIF">Actif</option>
-                                  <option value="VOYAGE">Voyage</option>
+                                  <option value="VOYAGE">En voyage</option>
                                   <option value="MALADE">Malade</option>
                                   <option value="MORT">Mort</option>
                                   <option value="ABANDONNE">Abandonné</option>
@@ -1343,6 +1343,23 @@ export default function MembresPage() {
                                 {membre.prenom} {membre.nom}
                               </h3>
                               <div className="flex gap-2 mt-1">
+                                {membre.isActive === false ? (
+                                  <Badge variant="danger">Inactif</Badge>
+                                ) : (
+                                  <Badge variant="success">Actif</Badge>
+                                )}
+                                <select
+                                  value={membre.etat || 'ACTIF'}
+                                  onChange={(e) => handleEtatQuickChange(membre.id, e.target.value)}
+                                  className="h-7 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 text-xs text-gray-900 dark:text-gray-100"
+                                  disabled={isReadOnly}
+                                >
+                                  <option value="ACTIF">Actif</option>
+                                  <option value="VOYAGE">En voyage</option>
+                                  <option value="MALADE">Malade</option>
+                                  <option value="MORT">Mort</option>
+                                  <option value="ABANDONNE">Abandonné</option>
+                                </select>
                                 {membre.fonction && (
                                   <Badge variant="default">
                                     <Briefcase className="w-3 h-3 mr-1" />
