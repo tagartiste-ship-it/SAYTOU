@@ -131,15 +131,15 @@ export default function EditRencontrePage() {
           params: { sectionId: formData.sectionId },
         });
         setMembres(membresRes.data.membres || []);
-        const onlyActive = (membresRes.data.membres || []).filter((m) => m.isActive !== false);
-        setMembresPresence(onlyActive);
+        const allMembres = membresRes.data.membres || [];
+        setMembresPresence(allMembres);
 
         setMembresPresents((prev) => {
-          const allowed = new Set(onlyActive.map((m) => m.id));
+          const allowed = new Set(allMembres.map((m) => m.id));
           return prev.filter((id) => allowed.has(id));
         });
         setMembresAbsents((prev) => {
-          const allowed = new Set(onlyActive.map((m) => m.id));
+          const allowed = new Set(allMembres.map((m) => m.id));
           return prev.filter((id) => allowed.has(id));
         });
 
@@ -219,8 +219,8 @@ export default function EditRencontrePage() {
         // Charger les membres de la section
         const membresRes = await api.get<{ membres: Membre[] }>('/membres');
         setMembres(membresRes.data.membres || []);
-        const onlyActive = (membresRes.data.membres || []).filter((m) => m.isActive !== false);
-        setMembresPresence(onlyActive);
+        const allMembres = membresRes.data.membres || [];
+        setMembresPresence(allMembres);
       }
     } catch (error: any) {
       console.error('Erreur détaillée:', error);
@@ -865,6 +865,9 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
                       const title = g;
 
                       const sortFn = (a: Membre, b: Membre) => {
+                        const aActive = a.isActive !== false;
+                        const bActive = b.isActive !== false;
+                        if (aActive !== bActive) return aActive ? -1 : 1;
                         const aChecked = membresPresents.includes(a.id) || membresAbsents.includes(a.id);
                         const bChecked = membresPresents.includes(b.id) || membresAbsents.includes(b.id);
                         if (aChecked !== bChecked) return aChecked ? 1 : -1;

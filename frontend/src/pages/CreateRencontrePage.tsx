@@ -295,15 +295,15 @@ export default function CreateRencontrePage() {
           const membresPresenceRes = await api.get<{ membres: Membre[] }>('/membres', {
             params: presenceParams,
           });
-          const onlyActive = (membresPresenceRes.data.membres || []).filter((m) => m.isActive !== false);
-          setMembresPresence(onlyActive);
+          const allMembres = membresPresenceRes.data.membres || [];
+          setMembresPresence(allMembres);
 
           setMembresPresents((prev) => {
-            const allowed = new Set(onlyActive.map((m) => m.id));
+            const allowed = new Set(allMembres.map((m) => m.id));
             return prev.filter((id) => allowed.has(id));
           });
           setMembresAbsents((prev) => {
-            const allowed = new Set(onlyActive.map((m) => m.id));
+            const allowed = new Set(allMembres.map((m) => m.id));
             return prev.filter((id) => allowed.has(id));
           });
         } else {
@@ -1111,6 +1111,9 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
                       const rightLabel = g === 'S1' ? 'Filles' : 'Liste femmes';
 
                       const sortFn = (a: Membre, b: Membre) => {
+                        const aActive = a.isActive !== false;
+                        const bActive = b.isActive !== false;
+                        if (aActive !== bActive) return aActive ? -1 : 1;
                         const aChecked = membresPresents.includes(a.id) || membresAbsents.includes(a.id);
                         const bChecked = membresPresents.includes(b.id) || membresAbsents.includes(b.id);
                         if (aChecked !== bChecked) return aChecked ? 1 : -1;
