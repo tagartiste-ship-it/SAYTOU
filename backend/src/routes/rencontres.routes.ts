@@ -29,7 +29,7 @@ const updateMemberPresenceStats = async (args: { sectionId: string; typeId: stri
     });
 
     await prisma.membre.updateMany({
-      where: { id: { in: presentIds }, etat: { in: ['VOYAGE', 'MALADE'] as any } },
+      where: { id: { in: presentIds }, etat: { notIn: ['ACTIF', 'MORT'] as any } },
       data: { etat: 'ACTIF' as any, etatUpdatedAt: new Date() },
     });
   }
@@ -793,6 +793,15 @@ router.put(
             },
           },
         },
+      });
+
+      const finalDate = date ? new Date(date) : existingRencontre.date;
+      const finalMembresPresents = membresPresents !== undefined ? membresPresents : existingRencontre.membresPresents;
+      await updateMemberPresenceStats({
+        sectionId: String(existingRencontre.sectionId),
+        typeId: String(existingRencontre.typeId),
+        date: finalDate,
+        membresPresents: finalMembresPresents,
       });
 
       res.json({
