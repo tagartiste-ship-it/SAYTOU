@@ -14,47 +14,12 @@ const isValidMembreEtat = (value: unknown): value is MembreEtat => {
   return value === 'ACTIF' || value === 'VOYAGE' || value === 'MALADE' || value === 'MORT' || value === 'ABANDONNE';
 };
 
-const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-
 const computeIsActive = (m: { etat?: MembreEtat | null; ageTranche?: string | null; goudiAbsenceStreak?: number | null; lastPresenceAt?: Date | null }) => {
-  const etat = (m.etat ?? 'ACTIF') as MembreEtat;
-  if (etat === 'MORT' || etat === 'ABANDONNE' || etat === 'VOYAGE') return false;
-
-  const tranche = normalizeAgeTranche(m.ageTranche);
-  if (tranche === 'S3') {
-    return (Number(m.goudiAbsenceStreak ?? 0) || 0) < 3;
-  }
-
-  // S1/S2: inactif si aucune présence enregistrée depuis 1 mois
-  const lp = m.lastPresenceAt instanceof Date ? m.lastPresenceAt : (m.lastPresenceAt ? new Date(m.lastPresenceAt) : null);
-  if (!lp || Number.isNaN(lp.getTime())) return false;
-  return Date.now() - lp.getTime() <= ONE_MONTH_MS;
+  return true;
 };
 
 const buildActiveWhere = (baseWhere: any) => {
-  const since = new Date(Date.now() - ONE_MONTH_MS);
-  return {
-    AND: [
-      baseWhere,
-      { etat: { notIn: ['MORT', 'ABANDONNE', 'VOYAGE'] as any } },
-      {
-        OR: [
-          {
-            AND: [
-              { ageTranche: 'S3' },
-              { goudiAbsenceStreak: { lt: 3 } },
-            ],
-          },
-          {
-            AND: [
-              { ageTranche: { in: ['S1', 'S2'] } },
-              { lastPresenceAt: { gte: since } },
-            ],
-          },
-        ],
-      },
-    ],
-  };
+  return baseWhere;
 };
 
 const getActionSocialeRecipientIds = async (sectionId: string) => {

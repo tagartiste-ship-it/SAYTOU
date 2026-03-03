@@ -4,32 +4,8 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
-const ONE_MONTH_MS = 30 * 24 * 60 * 60 * 1000;
-
 const buildActiveMemberWhere = (baseWhere: any) => {
-  const since = new Date(Date.now() - ONE_MONTH_MS);
-  return {
-    AND: [
-      baseWhere,
-      { etat: { notIn: ['MORT', 'ABANDONNE', 'VOYAGE'] as any } },
-      {
-        OR: [
-          {
-            AND: [
-              { ageTranche: 'S3' },
-              { goudiAbsenceStreak: { lt: 3 } },
-            ],
-          },
-          {
-            AND: [
-              { ageTranche: { in: ['S1', 'S2'] } },
-              { lastPresenceAt: { gte: since } },
-            ],
-          },
-        ],
-      },
-    ],
-  };
+  return baseWhere;
 };
 
 const getDateRangeFilter = (req: AuthRequest) => {
