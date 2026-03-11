@@ -416,7 +416,11 @@ export default function CreateRencontrePage() {
       return;
     }
 
-    if (!formData.sectionId) {
+    const effectiveSectionId =
+      formData.sectionId ||
+      (user?.role === 'SECTION_USER' ? (user.sectionId || '') : '');
+
+    if (!effectiveSectionId) {
       if (user?.role === 'SECTION_USER') {
         toast.error('Section non définie. Veuillez contacter l\'administrateur');
       } else {
@@ -435,7 +439,7 @@ export default function CreateRencontrePage() {
 
       const payload = {
         typeId: formData.typeId,
-        sectionId: formData.sectionId,
+        sectionId: effectiveSectionId,
         date: formData.date,
         heureDebut: formData.heureDebut,
         heureFin: formData.heureFin,
