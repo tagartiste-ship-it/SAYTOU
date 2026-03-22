@@ -14,6 +14,28 @@ const isValidMembreEtat = (value: unknown): value is MembreEtat => {
   return value === 'ACTIF' || value === 'VOYAGE' || value === 'MALADE' || value === 'MORT' || value === 'ABANDONNE';
 };
 
+const NIVEAUX_ETUDES_SENEGAL = [
+  'AUCUN',
+  'PRESCOLAIRE',
+  'PRIMAIRE',
+  'CFEE',
+  'COLLEGE_BFEM',
+  'LYCEE_BAC',
+  'BTS_DUT',
+  'LICENCE',
+  'MASTER',
+  'DOCTORAT',
+  'AUTRE',
+] as const;
+
+type NiveauEtudesDiplome = (typeof NIVEAUX_ETUDES_SENEGAL)[number];
+
+const isValidNiveauEtudesDiplome = (value: unknown): value is NiveauEtudesDiplome => {
+  if (value == null) return false;
+  const v = String(value).trim().toUpperCase();
+  return (NIVEAUX_ETUDES_SENEGAL as readonly string[]).includes(v);
+};
+
 const computeIsActive = (m: { etat?: MembreEtat | null; ageTranche?: string | null; goudiAbsenceStreak?: number | null; lastPresenceAt?: Date | null }) => {
   return true;
 };
@@ -1057,6 +1079,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       nom,
       genre,
       fonction,
+      niveauEtudesDiplome,
       corpsMetier,
       groupeSanguin,
       telephone,
@@ -1108,6 +1131,12 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'etat invalide' });
     }
 
+    if (niveauEtudesDiplome !== undefined && niveauEtudesDiplome !== null && String(niveauEtudesDiplome).trim() !== '') {
+      if (!isValidNiveauEtudesDiplome(niveauEtudesDiplome)) {
+        return res.status(400).json({ error: 'niveauEtudesDiplome invalide' });
+      }
+    }
+
     const membre = await prisma.membre.create({
       data: {
         sectionId: finalSectionId,
@@ -1116,6 +1145,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         nom,
         genre,
         fonction,
+        niveauEtudesDiplome:
+          niveauEtudesDiplome === undefined || niveauEtudesDiplome === null || String(niveauEtudesDiplome).trim() === ''
+            ? undefined
+            : String(niveauEtudesDiplome).trim().toUpperCase(),
         corpsMetier,
         groupeSanguin,
         telephone,
@@ -1172,6 +1205,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       nom,
       genre,
       fonction,
+      niveauEtudesDiplome,
       corpsMetier,
       groupeSanguin,
       telephone,
@@ -1208,6 +1242,12 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'etat invalide' });
     }
 
+    if (niveauEtudesDiplome !== undefined && niveauEtudesDiplome !== null && String(niveauEtudesDiplome).trim() !== '') {
+      if (!isValidNiveauEtudesDiplome(niveauEtudesDiplome)) {
+        return res.status(400).json({ error: 'niveauEtudesDiplome invalide' });
+      }
+    }
+
     const before = etat !== undefined
       ? await prisma.membre.findUnique({ where: { id }, select: { id: true, etat: true, sectionId: true, prenom: true, nom: true } })
       : null;
@@ -1220,6 +1260,12 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         nom,
         genre,
         fonction,
+        niveauEtudesDiplome:
+          niveauEtudesDiplome === undefined
+            ? undefined
+            : niveauEtudesDiplome === null || String(niveauEtudesDiplome).trim() === ''
+              ? null
+              : String(niveauEtudesDiplome).trim().toUpperCase(),
         corpsMetier,
         groupeSanguin,
         telephone,

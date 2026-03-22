@@ -315,6 +315,7 @@ model Membre {
   nom                 String
   genre               String?
   fonction            String?
+  niveauEtudesDiplome String?   @map("niveau_etudes_diplome")
   corpsMetier         String?   @map("corps_metier")
   groupeSanguin       String?   @map("groupe_sanguin")
   telephone           String?

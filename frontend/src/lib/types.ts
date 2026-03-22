@@ -161,6 +161,7 @@ export interface Membre {
   nom: string;
   genre?: 'HOMME' | 'FEMME';
   fonction?: string;
+  niveauEtudesDiplome?: string | null;
   corpsMetier?: string;
   groupeSanguin?: string;
   telephone?: string;
