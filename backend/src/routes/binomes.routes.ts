@@ -152,7 +152,42 @@ const buildPairsAvoidingForbidden = (sortedByPresenceDesc: string[], forbidden: 
     remaining.splice(0, 1);
   }
 
-  if (remaining.length === 1) solos.push(remaining[0]);
+  for (const id of remaining) solos.push(id);
+
+  return { creates, solos };
+};
+
+const buildCrossPairsAvoidingForbidden = (left: string[], right: string[], forbidden: Set<string>) => {
+  const leftRemaining = [...left];
+  const rightRemaining = [...right];
+  const creates: { membreAId: string; membreBId: string }[] = [];
+  const solos: string[] = [];
+
+  while (leftRemaining.length > 0 && rightRemaining.length > 0) {
+    const a = leftRemaining[0];
+    let pickIndex = -1;
+    for (let i = rightRemaining.length - 1; i >= 0; i -= 1) {
+      const b = rightRemaining[i];
+      if (!forbidden.has(buildForbiddenPairsKey(a, b))) {
+        pickIndex = i;
+        break;
+      }
+    }
+
+    if (pickIndex === -1) {
+      pickIndex = rightRemaining.length - 1;
+    }
+
+    const b = rightRemaining[pickIndex];
+    creates.push({ membreAId: a, membreBId: b });
+    forbidden.add(buildForbiddenPairsKey(a, b));
+    rightRemaining.splice(pickIndex, 1);
+    leftRemaining.splice(0, 1);
+  }
+
+  for (const id of leftRemaining) solos.push(id);
+  for (const id of rightRemaining) solos.push(id);
+
   return { creates, solos };
 };
 
@@ -180,6 +215,14 @@ const getMemberPresenceStats = async (sectionId: string, memberIds: string[]) =>
 
 const buildReport = async (sectionId: string) => {
   const since = subDays(new Date(), THREE_MONTHS_DAYS);
+  const tranches = await prisma.trancheAge.findMany({ select: { id: true, name: true } });
+  const trancheNameById = new Map<string, string>();
+  for (const t of tranches) trancheNameById.set(t.id, t.name);
+  const trancheS2 = tranches.find((t) => normalizeMemberAgeTrancheName(t.name) === 'S2') ?? null;
+  const trancheS3 = tranches.find((t) => normalizeMemberAgeTrancheName(t.name) === 'S3') ?? null;
+  const trancheS2Id = trancheS2?.id ?? null;
+  const trancheS3Id = trancheS3?.id ?? null;
+
   const rencontres = await prisma.rencontre.findMany({
     where: { sectionId, date: { gte: since } },
     select: { id: true, date: true, membresPresents: true },
@@ -259,6 +302,7 @@ const buildReport = async (sectionId: string) => {
     const trancheAgeId = await computeMemberTranche({ dateNaissance: m.dateNaissance, ageTranche: (m as any).ageTranche });
     const genre = normalizeGenre(m.genre);
     if (!trancheAgeId || !genre) continue;
+    if (trancheAgeId !== trancheS2Id && trancheAgeId !== trancheS3Id) continue;
     if (pairedMemberIds.has(m.id)) continue;
     const tranche = await prisma.trancheAge.findUnique({ where: { id: trancheAgeId } });
     if (!tranche) continue;
@@ -272,7 +316,7 @@ const buildReport = async (sectionId: string) => {
 
   const solosByKey = new Map<string, any[]>();
   for (const s of solos) {
-    const key = `${s.trancheAgeId}:${s.genre}`;
+    const key = String(s.genre);
     const list = solosByKey.get(key) || [];
     list.push(s);
     solosByKey.set(key, list);
@@ -281,7 +325,7 @@ const buildReport = async (sectionId: string) => {
   const lastPairIndexByKey = new Map<string, number>();
   for (let i = 0; i < pairs.length; i += 1) {
     const p = pairs[i];
-    const key = `${p.trancheAgeId}:${p.genre}`;
+    const key = String(p.genre);
     lastPairIndexByKey.set(key, i);
   }
 
@@ -334,6 +378,16 @@ const rotateForSection = async (sectionId: string, opts?: { avoidPairsMonths?: n
     await prisma.binomeCycle.update({ where: { id: existing.id }, data: { isActive: false, endedAt: new Date() } });
   }
 
+  const tranches = await prisma.trancheAge.findMany({ select: { id: true, name: true } });
+  const trancheS2 = tranches.find((t) => normalizeMemberAgeTrancheName(t.name) === 'S2') ?? null;
+  const trancheS3 = tranches.find((t) => normalizeMemberAgeTrancheName(t.name) === 'S3') ?? null;
+  const trancheS2Id = trancheS2?.id ?? null;
+  const trancheS3Id = trancheS3?.id ?? null;
+  const trancheForPairsId = trancheS2Id ?? trancheS3Id;
+  if (!trancheForPairsId) {
+    return null;
+  }
+
   const members = await prisma.membre.findMany({
     where: { sectionId, etat: 'ACTIF' as any },
     select: { id: true, genre: true, dateNaissance: true, ageTranche: true },
@@ -349,7 +403,9 @@ const rotateForSection = async (sectionId: string, opts?: { avoidPairsMonths?: n
   }
 
   const eligible = enriched.filter((m) => !!m.trancheAgeId && !!m.genre) as { id: string; trancheAgeId: string; genre: string }[];
-  const memberIds = eligible.map((m) => m.id);
+  const eligibleS2 = eligible.filter((m) => m.trancheAgeId === trancheS2Id);
+  const eligibleS3 = eligible.filter((m) => m.trancheAgeId === trancheS3Id);
+  const memberIds = [...eligibleS2, ...eligibleS3].map((m) => m.id);
   const { presentByMember } = await getMemberPresenceStats(sectionId, memberIds);
 
   const forbiddenPairs = await getForbiddenPairsLastMonths(sectionId, opts?.avoidPairsMonths ?? 12);
@@ -362,24 +418,29 @@ const rotateForSection = async (sectionId: string, opts?: { avoidPairsMonths?: n
     },
   });
 
-  const groups = new Map<string, string[]>();
-  for (const m of eligible) {
-    const key = `${m.trancheAgeId}:${m.genre}`;
-    const list = groups.get(key) || [];
-    list.push(m.id);
-    groups.set(key, list);
+  const groupsByGenre = new Map<string, { s2: string[]; s3: string[] }>();
+  for (const m of eligibleS2) {
+    const key = String(m.genre);
+    const g = groupsByGenre.get(key) || { s2: [], s3: [] };
+    g.s2.push(m.id);
+    groupsByGenre.set(key, g);
+  }
+  for (const m of eligibleS3) {
+    const key = String(m.genre);
+    const g = groupsByGenre.get(key) || { s2: [], s3: [] };
+    g.s3.push(m.id);
+    groupsByGenre.set(key, g);
   }
 
   const pairCreates: any[] = [];
-
-  for (const [key, ids] of groups.entries()) {
-    const [trancheAgeId, genre] = key.split(':');
-    const sorted = [...ids].sort((a, b) => (presentByMember[b] ?? 0) - (presentByMember[a] ?? 0));
-    const { creates } = buildPairsAvoidingForbidden(sorted, forbiddenPairs);
+  for (const [genre, ids] of groupsByGenre.entries()) {
+    const s2Sorted = [...ids.s2].sort((a, b) => (presentByMember[b] ?? 0) - (presentByMember[a] ?? 0));
+    const s3Sorted = [...ids.s3].sort((a, b) => (presentByMember[b] ?? 0) - (presentByMember[a] ?? 0));
+    const { creates } = buildCrossPairsAvoidingForbidden(s2Sorted, s3Sorted, forbiddenPairs);
     for (const c of creates) {
       pairCreates.push({
         cycleId: cycle.id,
-        trancheAgeId,
+        trancheAgeId: trancheForPairsId,
         genre,
         membreAId: c.membreAId,
         membreBId: c.membreBId,
@@ -524,6 +585,17 @@ router.post('/generate', authenticate, async (req: AuthRequest, res: Response): 
       return;
     }
 
+    const tranches = await prisma.trancheAge.findMany({ select: { id: true, name: true } });
+    const trancheS2 = tranches.find((t) => normalizeMemberAgeTrancheName(t.name) === 'S2') ?? null;
+    const trancheS3 = tranches.find((t) => normalizeMemberAgeTrancheName(t.name) === 'S3') ?? null;
+    const trancheS2Id = trancheS2?.id ?? null;
+    const trancheS3Id = trancheS3?.id ?? null;
+    const trancheForPairsId = trancheS2Id ?? trancheS3Id;
+    if (!trancheForPairsId) {
+      res.status(400).json({ error: 'Tranches d\'âge S2/S3 non configurées' });
+      return;
+    }
+
     const existing = await prisma.binomeCycle.findFirst({ where: { sectionId, isActive: true } });
     if (existing) {
       await prisma.binomeCycle.update({ where: { id: existing.id }, data: { isActive: false, endedAt: new Date() } });
@@ -546,6 +618,8 @@ router.post('/generate', authenticate, async (req: AuthRequest, res: Response): 
     }
 
     const eligible = enriched.filter((m) => !!m.trancheAgeId && !!m.genre) as { id: string; trancheAgeId: string; genre: string }[];
+    const eligibleS2 = eligible.filter((m) => m.trancheAgeId === trancheS2Id);
+    const eligibleS3 = eligible.filter((m) => m.trancheAgeId === trancheS3Id);
 
     const cycle = await prisma.binomeCycle.create({
       data: {
@@ -555,34 +629,40 @@ router.post('/generate', authenticate, async (req: AuthRequest, res: Response): 
       },
     });
 
-    const groups = new Map<string, string[]>();
-    for (const m of eligible) {
-      const key = `${m.trancheAgeId}:${m.genre}`;
-      const list = groups.get(key) || [];
-      list.push(m.id);
-      groups.set(key, list);
+    const forbiddenPairs = await getForbiddenPairsLastMonths(sectionId, 12);
+
+    const groupsByGenre = new Map<string, { s2: string[]; s3: string[] }>();
+    for (const m of eligibleS2) {
+      const key = String(m.genre);
+      const g = groupsByGenre.get(key) || { s2: [], s3: [] };
+      g.s2.push(m.id);
+      groupsByGenre.set(key, g);
+    }
+    for (const m of eligibleS3) {
+      const key = String(m.genre);
+      const g = groupsByGenre.get(key) || { s2: [], s3: [] };
+      g.s3.push(m.id);
+      groupsByGenre.set(key, g);
     }
 
     const pairCreates: any[] = [];
     const solos: any[] = [];
 
-    for (const [key, ids] of groups.entries()) {
-      const [trancheAgeId, genre] = key.split(':');
-      const shuffled = shuffle(ids);
-      for (let i = 0; i < shuffled.length; i += 2) {
-        const a = shuffled[i];
-        const b = shuffled[i + 1];
-        if (!b) {
-          solos.push({ trancheAgeId, genre, membreId: a });
-          break;
-        }
+    for (const [genre, ids] of groupsByGenre.entries()) {
+      const s2Shuffled = shuffle(ids.s2);
+      const s3Shuffled = shuffle(ids.s3);
+      const { creates, solos: leftover } = buildCrossPairsAvoidingForbidden(s2Shuffled, s3Shuffled, forbiddenPairs);
+      for (const c of creates) {
         pairCreates.push({
           cycleId: cycle.id,
-          trancheAgeId,
+          trancheAgeId: trancheForPairsId,
           genre,
-          membreAId: a,
-          membreBId: b,
+          membreAId: c.membreAId,
+          membreBId: c.membreBId,
         });
+      }
+      for (const membreId of leftover) {
+        solos.push({ trancheAgeId: trancheForPairsId, genre, membreId });
       }
     }
 
@@ -615,6 +695,17 @@ router.post('/rotate', authenticate, async (req: AuthRequest, res: Response): Pr
       await prisma.binomeCycle.update({ where: { id: existing.id }, data: { isActive: false, endedAt: new Date() } });
     }
 
+    const tranches = await prisma.trancheAge.findMany({ select: { id: true, name: true } });
+    const trancheS2 = tranches.find((t) => normalizeMemberAgeTrancheName(t.name) === 'S2') ?? null;
+    const trancheS3 = tranches.find((t) => normalizeMemberAgeTrancheName(t.name) === 'S3') ?? null;
+    const trancheS2Id = trancheS2?.id ?? null;
+    const trancheS3Id = trancheS3?.id ?? null;
+    const trancheForPairsId = trancheS2Id ?? trancheS3Id;
+    if (!trancheForPairsId) {
+      res.status(400).json({ error: 'Tranches d\'âge S2/S3 non configurées' });
+      return;
+    }
+
     const members = await prisma.membre.findMany({
       where: { sectionId, etat: 'ACTIF' as any },
       select: { id: true, genre: true, dateNaissance: true, ageTranche: true },
@@ -630,9 +721,12 @@ router.post('/rotate', authenticate, async (req: AuthRequest, res: Response): Pr
     }
 
     const eligible = enriched.filter((m) => !!m.trancheAgeId && !!m.genre) as { id: string; trancheAgeId: string; genre: string }[];
-    const memberIds = eligible.map((m) => m.id);
+    const eligibleS2 = eligible.filter((m) => m.trancheAgeId === trancheS2Id);
+    const eligibleS3 = eligible.filter((m) => m.trancheAgeId === trancheS3Id);
 
+    const memberIds = [...eligibleS2, ...eligibleS3].map((m) => m.id);
     const { totalRencontres, presentByMember } = await getMemberPresenceStats(sectionId, memberIds);
+    const forbiddenPairs = await getForbiddenPairsLastMonths(sectionId, 12);
 
     const cycle = await prisma.binomeCycle.create({
       data: {
@@ -642,41 +736,38 @@ router.post('/rotate', authenticate, async (req: AuthRequest, res: Response): Pr
       },
     });
 
-    const groups = new Map<string, string[]>();
-    for (const m of eligible) {
-      const key = `${m.trancheAgeId}:${m.genre}`;
-      const list = groups.get(key) || [];
-      list.push(m.id);
-      groups.set(key, list);
+    const groupsByGenre = new Map<string, { s2: string[]; s3: string[] }>();
+    for (const m of eligibleS2) {
+      const key = String(m.genre);
+      const g = groupsByGenre.get(key) || { s2: [], s3: [] };
+      g.s2.push(m.id);
+      groupsByGenre.set(key, g);
+    }
+    for (const m of eligibleS3) {
+      const key = String(m.genre);
+      const g = groupsByGenre.get(key) || { s2: [], s3: [] };
+      g.s3.push(m.id);
+      groupsByGenre.set(key, g);
     }
 
     const pairCreates: any[] = [];
     const solos: any[] = [];
 
-    for (const [key, ids] of groups.entries()) {
-      const [trancheAgeId, genre] = key.split(':');
-
-      const sorted = [...ids].sort((a, b) => {
-        const pa = presentByMember[a] ?? 0;
-        const pb = presentByMember[b] ?? 0;
-        return pb - pa;
-      });
-
-      let left = 0;
-      let right = sorted.length - 1;
-      while (left < right) {
+    for (const [genre, ids] of groupsByGenre.entries()) {
+      const s2Sorted = [...ids.s2].sort((a, b) => (presentByMember[b] ?? 0) - (presentByMember[a] ?? 0));
+      const s3Sorted = [...ids.s3].sort((a, b) => (presentByMember[b] ?? 0) - (presentByMember[a] ?? 0));
+      const { creates, solos: leftover } = buildCrossPairsAvoidingForbidden(s2Sorted, s3Sorted, forbiddenPairs);
+      for (const c of creates) {
         pairCreates.push({
           cycleId: cycle.id,
-          trancheAgeId,
+          trancheAgeId: trancheForPairsId,
           genre,
-          membreAId: sorted[left],
-          membreBId: sorted[right],
+          membreAId: c.membreAId,
+          membreBId: c.membreBId,
         });
-        left += 1;
-        right -= 1;
       }
-      if (left === right) {
-        solos.push({ trancheAgeId, genre, membreId: sorted[left] });
+      for (const membreId of leftover) {
+        solos.push({ trancheAgeId: trancheForPairsId, genre, membreId });
       }
     }
 
