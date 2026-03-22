@@ -250,7 +250,7 @@ const buildReport = async (sectionId: string) => {
   }
 
   const members = await prisma.membre.findMany({
-    where: { sectionId },
+    where: { sectionId, etat: 'ACTIF' as any },
     select: { id: true, prenom: true, nom: true, genre: true, dateNaissance: true, ageTranche: true },
   });
 
@@ -335,7 +335,7 @@ const rotateForSection = async (sectionId: string, opts?: { avoidPairsMonths?: n
   }
 
   const members = await prisma.membre.findMany({
-    where: { sectionId },
+    where: { sectionId, etat: 'ACTIF' as any },
     select: { id: true, genre: true, dateNaissance: true, ageTranche: true },
   });
 
@@ -452,7 +452,14 @@ router.get('/current', authenticate, async (req: AuthRequest, res: Response): Pr
       },
     });
 
-    res.json({ cycle });
+    const filtered = cycle
+      ? {
+          ...cycle,
+          pairs: (cycle.pairs || []).filter((p: any) => p?.membreA?.etat === 'ACTIF' && p?.membreB?.etat === 'ACTIF'),
+        }
+      : cycle;
+
+    res.json({ cycle: filtered });
   } catch (e) {
     console.error('Erreur binomes/current:', e);
     res.status(500).json({ error: 'Erreur lors du chargement des binômes' });
@@ -523,7 +530,7 @@ router.post('/generate', authenticate, async (req: AuthRequest, res: Response): 
     }
 
     const members = await prisma.membre.findMany({
-      where: { sectionId },
+      where: { sectionId, etat: 'ACTIF' as any },
       select: { id: true, genre: true, dateNaissance: true, ageTranche: true, prenom: true, nom: true },
     });
 
@@ -609,7 +616,7 @@ router.post('/rotate', authenticate, async (req: AuthRequest, res: Response): Pr
     }
 
     const members = await prisma.membre.findMany({
-      where: { sectionId },
+      where: { sectionId, etat: 'ACTIF' as any },
       select: { id: true, genre: true, dateNaissance: true, ageTranche: true },
     });
 
