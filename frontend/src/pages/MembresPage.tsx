@@ -968,6 +968,21 @@ export default function MembresPage() {
                           </select>
                         </div>
                         <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Niveau d'études/diplôme</label>
+                          <select
+                            value={(formData as any).niveauEtudesDiplome}
+                            onChange={(e) => setFormData({ ...(formData as any), niveauEtudesDiplome: e.target.value })}
+                            className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                          >
+                            <option value="">-</option>
+                            {niveauxEtudesSenegal.map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
                           <label className="label text-gray-700 dark:text-gray-300">Téléphone</label>
                           <Input
                             type="tel"
@@ -1221,6 +1236,21 @@ export default function MembresPage() {
                             value={formData.fonction}
                             onChange={(e) => setFormData({ ...formData, fonction: e.target.value })}
                           />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Niveau d'études/diplôme</label>
+                          <select
+                            value={(formData as any).niveauEtudesDiplome}
+                            onChange={(e) => setFormData({ ...(formData as any), niveauEtudesDiplome: e.target.value })}
+                            className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                          >
+                            <option value="">-</option>
+                            {niveauxEtudesSenegal.map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div>
                           <label className="label text-gray-700 dark:text-gray-300">Corps de métier</label>
@@ -1499,6 +1529,21 @@ export default function MembresPage() {
                             value={formData.fonction}
                             onChange={(e) => setFormData({ ...formData, fonction: e.target.value })}
                           />
+                        </div>
+                        <div>
+                          <label className="label text-gray-700 dark:text-gray-300">Niveau d'études/diplôme</label>
+                          <select
+                            value={(formData as any).niveauEtudesDiplome}
+                            onChange={(e) => setFormData({ ...(formData as any), niveauEtudesDiplome: e.target.value })}
+                            className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 dark:text-gray-100"
+                          >
+                            <option value="">-</option>
+                            {niveauxEtudesSenegal.map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div>
                           <label className="label text-gray-700 dark:text-gray-300">Corps de métier</label>
