@@ -54,7 +54,7 @@ export default function CreateRencontrePage() {
   // Form data
   const [formData, setFormData] = useState({
     typeId: '',
-    sectionId: user?.sectionId || '',
+    sectionId: user?.sectionId || user?.section?.id || '',
     date: new Date().toISOString().split('T')[0],
     heureDebut: '09:00',
     heureFin: '11:00',
@@ -418,7 +418,7 @@ export default function CreateRencontrePage() {
 
     const effectiveSectionId =
       formData.sectionId ||
-      (user?.role === 'SECTION_USER' ? (user.sectionId || '') : '');
+      (user?.role === 'SECTION_USER' ? (user.sectionId || user.section?.id || '') : '');
 
     if (!effectiveSectionId) {
       if (user?.role === 'SECTION_USER') {

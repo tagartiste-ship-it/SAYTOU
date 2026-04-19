@@ -352,8 +352,16 @@ export default function EditRencontrePage() {
       return;
     }
 
-    if (!formData.sectionId) {
-      toast.error('Veuillez sélectionner une section');
+    const effectiveSectionId =
+      formData.sectionId ||
+      (user?.role === 'SECTION_USER' ? (user.sectionId || user.section?.id || '') : '');
+
+    if (!effectiveSectionId) {
+      if (user?.role === 'SECTION_USER') {
+        toast.error('Section non définie. Veuillez contacter l\'administrateur');
+      } else {
+        toast.error('Veuillez sélectionner une section');
+      }
       return;
     }
 
@@ -364,6 +372,7 @@ export default function EditRencontrePage() {
 
       const payload = {
         ...formData,
+        sectionId: effectiveSectionId,
         presenceHomme: Number(formData.presenceHomme),
         presenceFemme: Number(formData.presenceFemme),
         presenceTotale: Number(formData.presenceHomme) + Number(formData.presenceFemme),
