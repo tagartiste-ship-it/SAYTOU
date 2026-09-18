@@ -167,35 +167,27 @@ router.post(
         // SOUS_LOCALITE crée pour sa sous-localité
         scopeType = 'SOUS_LOCALITE';
         scopeId = user.sousLocaliteId;
-        
-        // La section est obligatoire et doit appartenir à sa sous-localité
-        if (!sectionId) {
-          res.status(400).json({ error: 'La section est obligatoire' });
-          return;
-        }
 
-        const section = await prisma.section.findUnique({
-          where: { id: sectionId },
-          select: { sousLocaliteId: true },
-        });
-
-        if (section?.sousLocaliteId !== user.sousLocaliteId) {
-          res.status(403).json({ error: 'Cette section n\'appartient pas à votre sous-localité' });
-          return;
+        // La section est optionnelle; si fournie, valider qu'elle appartient à la sous-localité
+        if (sectionId) {
+          const section = await prisma.section.findUnique({
+            where: { id: sectionId },
+            select: { sousLocaliteId: true },
+          });
+          if (section?.sousLocaliteId !== user.sousLocaliteId) {
+            res.status(403).json({ error: 'Cette section n\'appartient pas à votre sous-localité' });
+            return;
+          }
+          finalSectionId = sectionId;
+        } else {
+          finalSectionId = null;
         }
-        
-        finalSectionId = sectionId;
       } else if (role === 'LOCALITE' || role === 'COMITE_PEDAGOGIQUE') {
         // LOCALITE / COMITE_PEDAGOGIQUE crée pour la localité
         scopeType = 'LOCALITE';
         scopeId = 'LOCALITE';
-        
-        if (!sectionId) {
-          res.status(400).json({ error: 'La section est obligatoire' });
-          return;
-        }
-        
-        finalSectionId = sectionId;
+        // La section est optionnelle pour les rencontres de localité
+        finalSectionId = sectionId || null;
       } else {
         res.status(403).json({ error: 'Rôle non autorisé' });
         return;

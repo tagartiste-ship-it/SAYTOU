@@ -84,10 +84,7 @@ export default function EditRencontrePage() {
   const [membresPresents, setMembresPresents] = useState<string[]>([]);
   const [membresAbsents, setMembresAbsents] = useState<string[]>([]);
 
-  // Sous-localité / Localité: sections pour la fiche de présence groupée
-  type SectionInfo = { sectionId: string; sectionName: string; sousLocaliteName?: string; total: number };
-  const [sectionsInfo, setSectionsInfo] = useState<SectionInfo[]>([]);
-  const [sectionPresenceCounts, setSectionPresenceCounts] = useState<Record<string, { hommes: number; femmes: number }>>({}); 
+  // Sous-localité / Localité / Comité pédagogique: saisie directe des présences H/F
   const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE';
 
   const selectedType = types.find((t) => t.id === formData.typeId);
@@ -119,6 +116,7 @@ export default function EditRencontrePage() {
 
   useEffect(() => {
     if (user?.role === 'SECTION_USER') return;
+    if (isGroupedPresence) return;
     if (!formData.sectionId) {
       setMembres([]);
       setFormData((prev) => ({ ...prev, lieuMembreId: '' }));
@@ -160,36 +158,29 @@ export default function EditRencontrePage() {
   }, [formData.sectionId, user?.role]);
 
   useEffect(() => {
-    if (isGroupedPresence) {
-      let totalH = 0;
-      let totalF = 0;
-      for (const c of Object.values(sectionPresenceCounts)) {
-        totalH += c.hommes || 0;
-        totalF += c.femmes || 0;
-      }
-      setFormData((prev) => {
-        if (prev.presenceHomme === totalH && prev.presenceFemme === totalF) return prev;
-        return { ...prev, presenceHomme: totalH, presenceFemme: totalF };
-      });
-    } else {
-      if (membresPresence.length === 0) return;
-      const presenceHomme = membresPresence.filter(
-        (m) => m.genre === 'HOMME' && membresPresents.includes(m.id)
-      ).length;
-      const presenceFemme = membresPresence.filter(
-        (m) => m.genre === 'FEMME' && membresPresents.includes(m.id)
-      ).length;
-      setFormData((prev) => {
-        if (prev.presenceHomme === presenceHomme && prev.presenceFemme === presenceFemme) return prev;
-        return { ...prev, presenceHomme, presenceFemme };
-      });
-    }
-  }, [membresPresence, membresPresents, sectionPresenceCounts, isGroupedPresence]);
+    if (isGroupedPresence) return;
+    if (membresPresence.length === 0) return;
+    const presenceHomme = membresPresence.filter(
+      (m) => m.genre === 'HOMME' && membresPresents.includes(m.id)
+    ).length;
+    const presenceFemme = membresPresence.filter(
+      (m) => m.genre === 'FEMME' && membresPresents.includes(m.id)
+    ).length;
+    setFormData((prev) => {
+      if (prev.presenceHomme === presenceHomme && prev.presenceFemme === presenceFemme) return prev;
+      return { ...prev, presenceHomme, presenceFemme };
+    });
+  }, [membresPresence, membresPresents, isGroupedPresence]);
 
   const fetchData = async () => {
     try {
       const typesRes = await api.get<{ types: RencontreType[] }>('/types');
       setTypes(typesRes.data.types || []);
+
+      if (isGroupedPresence) {
+        // Saisie directe H/F: pas besoin de charger les sections ni les membres
+        return;
+      }
 
       // Charger les sections si l'utilisateur n'est pas SECTION_USER
       if (user?.role !== 'SECTION_USER') {
@@ -197,31 +188,11 @@ export default function EditRencontrePage() {
         setSections(sectionsRes.data.sections || []);
       }
 
-      // Sous-localité / Localité: charger les sections pour la fiche de présence
-      if (isGroupedPresence) {
-        try {
-          const parSectionsRes = await api.get<{ sections: Array<{ sectionId: string; sectionName: string; sousLocaliteName?: string; total: number }> }>('/membres/par-sections');
-          const secs = (parSectionsRes.data.sections || []).map((s) => ({
-            sectionId: s.sectionId,
-            sectionName: s.sectionName,
-            sousLocaliteName: s.sousLocaliteName,
-            total: s.total,
-          }));
-          setSectionsInfo(secs);
-          // Initialiser les compteurs à 0 (seront écrasés par fetchRencontre si des données existent)
-          const counts: Record<string, { hommes: number; femmes: number }> = {};
-          for (const s of secs) counts[s.sectionId] = { hommes: 0, femmes: 0 };
-          setSectionPresenceCounts(counts);
-        } catch {
-          setSectionsInfo([]);
-        }
-      } else {
-        // Charger les membres de la section
-        const membresRes = await api.get<{ membres: Membre[] }>('/membres');
-        setMembres(membresRes.data.membres || []);
-        const allMembres = membresRes.data.membres || [];
-        setMembresPresence(allMembres);
-      }
+      // Charger les membres de la section
+      const membresRes = await api.get<{ membres: Membre[] }>('/membres');
+      setMembres(membresRes.data.membres || []);
+      const allMembres = membresRes.data.membres || [];
+      setMembresPresence(allMembres);
     } catch (error: any) {
       console.error('Erreur détaillée:', error);
       toast.error(error.response?.data?.error || 'Erreur lors du chargement des données');
@@ -240,7 +211,7 @@ export default function EditRencontrePage() {
       // Remplir le formulaire avec les données existantes
       setFormData({
         typeId: rencontre.typeId,
-        sectionId: rencontre.sectionId,
+        sectionId: rencontre.sectionId || '',
         date: new Date(rencontre.date).toISOString().split('T')[0],
         heureDebut: rencontre.heureDebut,
         heureFin: rencontre.heureFin,
@@ -264,20 +235,8 @@ export default function EditRencontrePage() {
       }
 
       // Remplir les membres présents
-      if (rencontre.membresPresents && rencontre.membresPresents.length > 0) {
-        if (isGroupedPresence) {
-          // Restaurer les compteurs par section depuis les données sauvegardées
-          const saved = rencontre.membresPresents as any[];
-          if (saved.length > 0 && typeof saved[0] === 'object' && 'sectionId' in saved[0]) {
-            const counts: Record<string, { hommes: number; femmes: number }> = {};
-            for (const item of saved) {
-              counts[item.sectionId] = { hommes: item.hommes || 0, femmes: item.femmes || 0 };
-            }
-            setSectionPresenceCounts((prev) => ({ ...prev, ...counts }));
-          }
-        } else {
-          setMembresPresents(rencontre.membresPresents);
-        }
+      if (!isGroupedPresence && rencontre.membresPresents && rencontre.membresPresents.length > 0) {
+        setMembresPresents(rencontre.membresPresents);
       }
     } catch (error: any) {
       console.error('Erreur chargement rencontre:', error);
@@ -356,7 +315,7 @@ export default function EditRencontrePage() {
       formData.sectionId ||
       (user?.role === 'SECTION_USER' ? (user.sectionId || user.section?.id || '') : '');
 
-    if (!effectiveSectionId) {
+    if (!effectiveSectionId && !isGroupedPresence) {
       if (user?.role === 'SECTION_USER') {
         toast.error('Section non définie. Veuillez contacter l\'administrateur');
       } else {
@@ -372,20 +331,12 @@ export default function EditRencontrePage() {
 
       const payload = {
         ...formData,
-        sectionId: effectiveSectionId,
+        sectionId: effectiveSectionId || null,
         presenceHomme: Number(formData.presenceHomme),
         presenceFemme: Number(formData.presenceFemme),
         presenceTotale: Number(formData.presenceHomme) + Number(formData.presenceFemme),
         ordreDuJour: ordreDuJour.filter(item => item.titre.trim() !== ''),
-        membresPresents: isGroupedPresence
-          ? sectionsInfo.map((s) => ({
-              sectionId: s.sectionId,
-              sectionName: s.sectionName,
-              hommes: sectionPresenceCounts[s.sectionId]?.hommes || 0,
-              femmes: sectionPresenceCounts[s.sectionId]?.femmes || 0,
-              total: (sectionPresenceCounts[s.sectionId]?.hommes || 0) + (sectionPresenceCounts[s.sectionId]?.femmes || 0),
-            }))
-          : membresPresents,
+        membresPresents: isGroupedPresence ? [] : membresPresents,
         lieuMembreId: formData.lieuMembreId || null,
         lieuTexte: lieuTexteFinal,
       };
@@ -472,7 +423,7 @@ export default function EditRencontrePage() {
               </select>
             </div>
 
-            {user?.role !== 'SECTION_USER' && (
+            {user?.role !== 'SECTION_USER' && !isGroupedPresence && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Section *</label>
                 <select
@@ -738,7 +689,7 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                 <Users className="w-5 h-5 text-primary-600" />
-                Fiche de présence {isGroupedPresence && '(par section)'}
+                Fiche de présence
               </h2>
               {!isGroupedPresence && membresPresence.length > 0 && (
                 <Button
@@ -751,87 +702,12 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
               )}
             </div>
 
-          {/* ===== SOUS-LOCALITE / LOCALITE: tableau compact par section ===== */}
-          {isGroupedPresence && sectionsInfo.length > 0 ? (
-            <div className="space-y-4">
-              <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-                      <th className="text-left px-4 py-3 font-semibold text-gray-700 dark:text-gray-300">Section</th>
-                      <th className="text-center px-3 py-3 font-semibold text-blue-700 dark:text-blue-300 w-24">Hommes</th>
-                      <th className="text-center px-3 py-3 font-semibold text-pink-700 dark:text-pink-300 w-24">Femmes</th>
-                      <th className="text-center px-3 py-3 font-semibold text-gray-700 dark:text-gray-300 w-24">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sectionsInfo.map((sec, idx) => {
-                      const counts = sectionPresenceCounts[sec.sectionId] || { hommes: 0, femmes: 0 };
-                      const sectionTotal = (counts.hommes || 0) + (counts.femmes || 0);
-                      const updateCount = (field: 'hommes' | 'femmes', value: number) => {
-                        setSectionPresenceCounts((prev) => ({
-                          ...prev,
-                          [sec.sectionId]: { ...prev[sec.sectionId], [field]: Math.max(0, value) },
-                        }));
-                      };
-                      return (
-                        <tr
-                          key={sec.sectionId}
-                          className={`border-b border-gray-100 dark:border-gray-800 ${idx % 2 === 0 ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/50 dark:bg-gray-800/50'} ${sectionTotal > 0 ? 'ring-1 ring-inset ring-green-200 dark:ring-green-800' : ''}`}
-                        >
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-gray-900 dark:text-gray-100">{sec.sectionName}</span>
-                              <Badge variant="secondary" className="text-xs">{sec.total} mbr</Badge>
-                            </div>
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              value={counts.hommes || ''}
-                              placeholder="0"
-                              onChange={(e) => updateCount('hommes', parseInt(e.target.value) || 0)}
-                              className="w-20 mx-auto h-9 rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/20 px-2 py-1 text-center text-sm font-semibold text-blue-800 dark:text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              value={counts.femmes || ''}
-                              placeholder="0"
-                              onChange={(e) => updateCount('femmes', parseInt(e.target.value) || 0)}
-                              className="w-20 mx-auto h-9 rounded-lg border border-pink-300 dark:border-pink-700 bg-pink-50/50 dark:bg-pink-900/20 px-2 py-1 text-center text-sm font-semibold text-pink-800 dark:text-pink-200 focus:outline-none focus:ring-2 focus:ring-pink-500"
-                            />
-                          </td>
-                          <td className="px-3 py-3 text-center">
-                            <span className={`text-base font-bold ${sectionTotal > 0 ? 'text-green-700 dark:text-green-400' : 'text-gray-400 dark:text-gray-600'}`}>
-                              {sectionTotal}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-gradient-to-r from-primary-50 to-blue-50 dark:from-primary-900/20 dark:to-blue-900/20 border-t-2 border-primary-200 dark:border-primary-700">
-                      <td className="px-4 py-3 font-bold text-gray-900 dark:text-gray-100">TOTAL</td>
-                      <td className="px-3 py-3 text-center font-bold text-blue-700 dark:text-blue-300 text-lg">{formData.presenceHomme}</td>
-                      <td className="px-3 py-3 text-center font-bold text-pink-700 dark:text-pink-300 text-lg">{formData.presenceFemme}</td>
-                      <td className="px-3 py-3 text-center font-bold text-primary-700 dark:text-primary-300 text-lg">{Number(formData.presenceHomme) + Number(formData.presenceFemme)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-                <Badge variant="default" className="text-xs">{sectionsInfo.length} section{sectionsInfo.length > 1 ? 's' : ''}</Badge>
-                <span>•</span>
-                <span>Saisissez le nombre d'hommes et de femmes présents pour chaque section</span>
-              </div>
+          {/* ===== SOUS-LOCALITE / LOCALITE: saisie directe H/F dans la carte Présence totale ci-dessous ===== */}
+          {isGroupedPresence ? (
+            <div className="p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-900 dark:text-blue-100">
+              Saisie directe activée — indiquez le nombre total d'hommes et de femmes présents dans la section <strong>Présence totale</strong> ci-dessous.
             </div>
-          ) : !isGroupedPresence && membresPresence.length > 0 ? (
+          ) : membresPresence.length > 0 ? (
             <div className="space-y-6">
                 {(() => {
                   const buckets: Record<string, Membre[]> = { S1: [], S2: [], S3: [] };
@@ -1120,7 +996,7 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                 <Users className="w-12 h-12 mx-auto mb-2 text-gray-400 dark:text-gray-600" />
                 <p className="text-gray-900 dark:text-gray-100">Aucun membre enregistré</p>
-                <p className="text-sm">{isGroupedPresence ? 'Aucune section trouvée pour votre périmètre' : 'Allez dans la page "Membres" pour ajouter des membres à votre section'}</p>
+                <p className="text-sm">Allez dans la page "Membres" pour ajouter des membres à votre section</p>
               </div>
             )}
           </Card>
@@ -1139,20 +1015,26 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Hommes</label>
               <input
                 type="number"
-                readOnly
                 min="0"
+                readOnly={!isGroupedPresence}
                 value={formData.presenceHomme}
-                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2 text-sm dark:text-gray-100"
+                onChange={isGroupedPresence ? (e) => setFormData({ ...formData, presenceHomme: parseInt(e.target.value) || 0 }) : undefined}
+                className={isGroupedPresence
+                  ? 'flex h-11 w-full rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 text-sm text-blue-900 dark:text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500'
+                  : 'flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2 text-sm dark:text-gray-100'}
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Femmes</label>
               <input
                 type="number"
-                readOnly
                 min="0"
+                readOnly={!isGroupedPresence}
                 value={formData.presenceFemme}
-                className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2 text-sm dark:text-gray-100"
+                onChange={isGroupedPresence ? (e) => setFormData({ ...formData, presenceFemme: parseInt(e.target.value) || 0 }) : undefined}
+                className={isGroupedPresence
+                  ? 'flex h-11 w-full rounded-lg border border-pink-300 dark:border-pink-700 bg-pink-50 dark:bg-pink-900/20 px-4 py-2 text-sm text-pink-900 dark:text-pink-200 focus:outline-none focus:ring-2 focus:ring-pink-500'
+                  : 'flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-4 py-2 text-sm dark:text-gray-100'}
               />
             </div>
             <div>
