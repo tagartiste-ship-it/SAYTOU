@@ -17,7 +17,7 @@ const normalizeLoose = (value: unknown): string => {
     .trim();
 };
 
-const updateMemberPresenceStats = async (args: { sectionId: string; typeId: string; date: Date; membresPresents: unknown }) => {
+const updateMemberPresenceStats = async (args: { sectionId: string | null; typeId: string; date: Date; membresPresents: unknown }) => {
   const presentIds = Array.isArray(args.membresPresents)
     ? Array.from(new Set((args.membresPresents as any[]).map((x) => String(x)).filter(Boolean)))
     : [];
@@ -40,6 +40,7 @@ const updateMemberPresenceStats = async (args: { sectionId: string; typeId: stri
   });
   const isGoudiAldjouma = normalizeLoose(type?.name) === normalizeLoose('Goudi Aldjouma');
   if (!isGoudiAldjouma) return;
+  if (!args.sectionId) return; // pas de stats d'absence par section pour les rencontres de localité
 
   const recent = await prisma.rencontre.findMany({
     where: { sectionId: args.sectionId, typeId: args.typeId },
@@ -795,7 +796,7 @@ router.put(
       const finalDate = date ? new Date(date) : existingRencontre.date;
       const finalMembresPresents = membresPresents !== undefined ? membresPresents : existingRencontre.membresPresents;
       await updateMemberPresenceStats({
-        sectionId: String(existingRencontre.sectionId),
+        sectionId: existingRencontre.sectionId ?? null,
         typeId: String(existingRencontre.typeId),
         date: finalDate,
         membresPresents: finalMembresPresents,
