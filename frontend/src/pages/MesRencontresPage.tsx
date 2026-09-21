@@ -49,6 +49,8 @@ export default function MesRencontresPage() {
       if (filters.dateDebut) params.append('dateDebut', filters.dateDebut);
       if (filters.dateFin) params.append('dateFin', filters.dateFin);
       if (debouncedSearch) params.append('q', debouncedSearch);
+      // Comité pédagogique: voir uniquement ses propres rencontres
+      if (user?.role === 'COMITE_PEDAGOGIQUE') params.append('mine', '1');
       params.append('limit', '100');
 
       const response = await api.get<{ rencontres: Rencontre[] }>(`/rencontres?${params.toString()}`);
@@ -165,7 +167,7 @@ export default function MesRencontresPage() {
             {user?.role === 'SECTION_USER' && 'Rencontres de votre section'}
             {user?.role === 'SOUS_LOCALITE_ADMIN' && 'Rencontres de votre sous-localité et sections'}
             {user?.role === 'LOCALITE' && 'Toutes les rencontres'}
-            {user?.role === 'COMITE_PEDAGOGIQUE' && 'Toutes les rencontres (Comité Pédagogique)'}
+            {user?.role === 'COMITE_PEDAGOGIQUE' && 'Vos rencontres (Comité Pédagogique)'}
           </p>
         </div>
         <Button
@@ -260,7 +262,7 @@ export default function MesRencontresPage() {
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">{rencontre.type.name}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{rencontre.section.name}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{rencontre.section?.name || 'Localité'}</p>
                     </div>
                     {!canModify(rencontre) && (
                       <Badge variant="secondary">Lecture seule</Badge>

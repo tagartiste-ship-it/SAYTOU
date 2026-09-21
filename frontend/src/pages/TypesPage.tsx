@@ -185,7 +185,7 @@ export default function TypesPage() {
     }
   };
 
-  const canManage = user?.role === 'LOCALITE' || user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'SECTION_USER';
+  const canManage = user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE' || user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'SECTION_USER';
 
   const containerVariants = {
     hidden: { opacity: 0 },

@@ -403,7 +403,7 @@ router.get(
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { userId, role } = req.user!;
-      const { typeId, sectionId, dateDebut, dateFin, q, page = '1', limit = '20' } = req.query;
+      const { typeId, sectionId, dateDebut, dateFin, q, mine, page = '1', limit = '20' } = req.query;
 
       const pageNum = parseInt(page as string, 10);
       const limitNum = parseInt(limit as string, 10);
@@ -487,6 +487,11 @@ router.get(
         if (sectionId) {
           where.sectionId = sectionId as string;
         }
+      }
+
+      // mine=1 : uniquement les rencontres créées par l'utilisateur
+      if (mine === '1' || mine === 'true') {
+        where.createdById = userId;
       }
 
       if (Object.keys(where).length > 0) whereClauses.unshift(where);
@@ -614,7 +619,7 @@ router.get(
           select: { sousLocaliteId: true },
         });
 
-        if (user?.sousLocaliteId !== rencontre.section.sousLocaliteId) {
+        if (user?.sousLocaliteId !== rencontre.section?.sousLocaliteId) {
           res.status(403).json({ error: 'Accès non autorisé' });
           return;
         }

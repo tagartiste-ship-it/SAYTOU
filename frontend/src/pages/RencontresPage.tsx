@@ -5,6 +5,7 @@ import { Search, Calendar, Users, Filter, Download, TrendingUp } from 'lucide-re
 import { toast } from 'sonner';
 import api from '../lib/api';
 import type { Rencontre, RencontreType, Section } from '../lib/types';
+import { useAuthStore } from '../store/authStore';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Card } from '../components/ui/Card';
@@ -14,6 +15,7 @@ import { Badge } from '../components/ui/Badge';
 import { Skeleton } from '../components/ui/Skeleton';
 
 export default function RencontresPage() {
+  const { user } = useAuthStore();
   const [rencontres, setRencontres] = useState<Rencontre[]>([]);
   const [types, setTypes] = useState<RencontreType[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
@@ -47,6 +49,8 @@ export default function RencontresPage() {
       if (dateDebut) params.append('dateDebut', dateDebut);
       if (dateFin) params.append('dateFin', dateFin);
       if (debouncedSearch) params.append('q', debouncedSearch);
+      // Comité pédagogique: voir uniquement ses propres rencontres
+      if (user?.role === 'COMITE_PEDAGOGIQUE') params.append('mine', '1');
 
       const [rencontresRes, typesRes, sectionsRes] = await Promise.all([
         api.get<{ rencontres: Rencontre[] }>(`/rencontres?${params.toString()}`),
@@ -134,7 +138,11 @@ export default function RencontresPage() {
       <motion.div variants={itemVariants} className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Historique</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Consultez l'historique de toutes les rencontres</p>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
+            {user?.role === 'COMITE_PEDAGOGIQUE'
+              ? 'Consultez l\'historique de vos rencontres'
+              : 'Consultez l\'historique de toutes les rencontres'}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Badge variant="default" className="text-base px-4 py-2">
@@ -264,7 +272,7 @@ export default function RencontresPage() {
                           {rencontre.type.name}
                         </Badge>
                         <span className="text-gray-500 dark:text-gray-400 text-sm">
-                          {rencontre.section.name}
+                          {rencontre.section?.name || 'Localité'}
                         </span>
                       </div>
 

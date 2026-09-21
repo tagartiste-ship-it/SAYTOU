@@ -182,8 +182,8 @@ export interface Rencontre {
   id: string;
   typeId: string;
   type: RencontreType;
-  sectionId: string;
-  section: Section;
+  sectionId: string | null;
+  section: Section | null;
   scopeType: ScopeType;
   scopeId: string;
   lieuMembreId?: string | null;
