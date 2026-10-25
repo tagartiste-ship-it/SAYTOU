@@ -153,6 +153,10 @@ export interface Membre {
   section?: {
     id: string;
     name: string;
+    sousLocalite?: {
+      id: string;
+      name: string;
+    };
   };
   etat?: 'ACTIF' | 'VOYAGE' | 'MALADE' | 'MORT' | 'ABANDONNE';
   isActive?: boolean;

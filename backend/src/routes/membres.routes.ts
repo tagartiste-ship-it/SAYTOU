@@ -412,6 +412,7 @@ router.patch('/:id/etat', authenticate, async (req: AuthRequest, res: Response) 
           select: {
             id: true,
             name: true,
+            sousLocalite: { select: { id: true, name: true } },
           },
         },
       },
@@ -1018,6 +1019,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
             select: {
               id: true,
               name: true,
+              sousLocalite: { select: { id: true, name: true } },
             },
           },
         },
@@ -1167,6 +1169,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             name: true,
+            sousLocalite: { select: { id: true, name: true } },
           },
         },
       },
@@ -1284,6 +1287,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
           select: {
             id: true,
             name: true,
+            sousLocalite: { select: { id: true, name: true } },
           },
         },
       },

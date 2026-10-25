@@ -1144,6 +1144,11 @@ export default function MembresPage() {
                             )}
                           </div>
 
+                          <div className="flex flex-wrap gap-x-6 gap-y-1 mb-3 text-sm text-gray-600 dark:text-gray-400">
+                            <span><span className="font-medium">Section :</span> {membre.section?.name || 'Non renseignée'}</span>
+                            <span><span className="font-medium">Sous-localité :</span> {membre.section?.sousLocalite?.name || 'Non renseignée'}</span>
+                          </div>
+
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
                             {membre.corpsMetier && (
                               <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
@@ -1438,6 +1443,11 @@ export default function MembresPage() {
                             )}
                           </div>
 
+                          <div className="flex flex-wrap gap-x-6 gap-y-1 mb-3 text-sm text-gray-600 dark:text-gray-400">
+                            <span><span className="font-medium">Section :</span> {membre.section?.name || 'Non renseignée'}</span>
+                            <span><span className="font-medium">Sous-localité :</span> {membre.section?.sousLocalite?.name || 'Non renseignée'}</span>
+                          </div>
+
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
                             {membre.corpsMetier && (
                               <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
@@ -1712,6 +1722,11 @@ export default function MembresPage() {
                               </motion.button>
                             </div>
                             )}
+                          </div>
+
+                          <div className="flex flex-wrap gap-x-6 gap-y-1 mb-3 text-sm text-gray-600 dark:text-gray-400">
+                            <span><span className="font-medium">Section :</span> {membre.section?.name || 'Non renseignée'}</span>
+                            <span><span className="font-medium">Sous-localité :</span> {membre.section?.sousLocalite?.name || 'Non renseignée'}</span>
                           </div>
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
