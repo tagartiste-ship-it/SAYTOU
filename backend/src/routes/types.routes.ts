@@ -65,7 +65,9 @@ router.get(
       // Construire le filtre selon le rôle
       const where: any = {};
 
-      if (role === 'SECTION_USER') {
+      if (role === 'ORG_UNIT_RESP') {
+        where.OR = [{ scopeType: null }, { scopeType: 'LOCALITE' }];
+      } else if (role === 'SECTION_USER') {
         const user = await prisma.user.findUnique({
           where: { id: userId },
           select: { sectionId: true, sousLocaliteId: true },

@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, Filter, Search, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
+import { useMeetingArchive } from '../hooks/useMeetingArchive';
+import { MeetingArchiveControls } from '../components/MeetingArchiveControls';
 import type { Rencontre, RencontreType } from '../lib/types';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
@@ -17,16 +19,8 @@ type SectionHistory = {
   rencontres: Rencontre[];
 };
 
-type SectionsHistoryResponse = {
-  sousLocaliteId: string;
-  sections: SectionHistory[];
-};
-
 export default function HistoriqueSectionsPage() {
   const [types, setTypes] = useState<RencontreType[]>([]);
-  const [sections, setSections] = useState<SectionHistory[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -41,50 +35,22 @@ export default function HistoriqueSectionsPage() {
     return () => window.clearTimeout(t);
   }, [searchTerm]);
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (selectedType) params.append('typeId', selectedType);
-      if (dateDebut) params.append('dateDebut', dateDebut);
-      if (dateFin) params.append('dateFin', dateFin);
-      if (debouncedSearch) params.append('q', debouncedSearch);
-
-      const [historyRes, typesRes] = await Promise.all([
-        api.get<SectionsHistoryResponse>(`/rencontres/sections-history?${params.toString()}`),
-        api.get<{ types: RencontreType[] }>('/types'),
-      ]);
-
-      const nextSections = Array.isArray(historyRes.data?.sections) ? historyRes.data.sections : [];
-      setSections(nextSections);
-      setTypes(Array.isArray(typesRes.data?.types) ? typesRes.data.types : []);
-
-      setOpenBySectionId((prev) => {
-        const next = { ...prev };
-        for (const s of nextSections) {
-          if (next[s.sectionId] == null) next[s.sectionId] = false;
-        }
-        return next;
-      });
-    } catch (e: any) {
-      console.error('Erreur chargement historique sections:', e);
-      const msg = e?.response?.data?.error || e?.message || 'Erreur lors du chargement';
-      setError(msg);
-      toast.error(msg);
-      setSections([]);
-      setTypes([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  const archive = useMeetingArchive({ sectionsOnly: '1', typeId: selectedType, dateDebut, dateFin, q: debouncedSearch });
+  const { isLoading, error } = archive;
+  const totalRencontres = archive.total;
+  const bySection = new Map<string, SectionHistory>();
+  for (const rencontre of archive.rencontres) {
+    if (!rencontre.section) continue;
+    const row = bySection.get(rencontre.section.id) || { sectionId: rencontre.section.id, sectionName: rencontre.section.name, total: 0, rencontres: [] };
+    row.total += 1;
+    row.rencontres.push(rencontre);
+    bySection.set(row.sectionId, row);
+  }
+  const sections = [...bySection.values()].sort((a, b) => a.sectionName.localeCompare(b.sectionName, 'fr'));
   useEffect(() => {
-    void fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedType, dateDebut, dateFin, debouncedSearch]);
-
-  const totalRencontres = useMemo(() => sections.reduce((sum, s) => sum + (Number(s.total) || 0), 0), [sections]);
+    api.get<{ types: RencontreType[] }>('/types').then(({ data }) => setTypes(data.types || []))
+      .catch(() => toast.error('Impossible de charger les types'));
+  }, []);
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -117,7 +83,7 @@ export default function HistoriqueSectionsPage() {
           <div className="text-red-600 text-xl mb-4">❌ Erreur</div>
           <p className="text-gray-700 dark:text-gray-300">{error}</p>
           <div className="mt-4">
-            <Button onClick={() => void fetchData()}>Réessayer</Button>
+            <Button onClick={archive.reload}>Réessayer</Button>
           </div>
         </Card>
       </div>
@@ -198,6 +164,8 @@ export default function HistoriqueSectionsPage() {
         </Card>
       </motion.div>
 
+      <MeetingArchiveControls archive={archive} />
+
       <motion.div variants={itemVariants} className="space-y-4">
         {sections.length === 0 ? (
           <Card className="p-10 text-center">
@@ -205,17 +173,17 @@ export default function HistoriqueSectionsPage() {
           </Card>
         ) : (
           sections.map((s) => {
-            const isOpen = !!openBySectionId[s.sectionId];
+            const isOpen = openBySectionId[s.sectionId] !== false;
             return (
               <Card key={s.sectionId} className="p-0">
                 <button
                   type="button"
                   className="w-full flex items-center justify-between gap-3 border-b border-gray-200 dark:border-gray-800 px-4 py-3 text-left"
-                  onClick={() => setOpenBySectionId((prev) => ({ ...prev, [s.sectionId]: !prev[s.sectionId] }))}
+                  onClick={() => setOpenBySectionId((prev) => ({ ...prev, [s.sectionId]: prev[s.sectionId] === false }))}
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">{s.sectionName}</p>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">Section ID: {s.sectionId}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">{s.total} rencontre(s) sur cette page</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge variant="secondary">{s.total}</Badge>

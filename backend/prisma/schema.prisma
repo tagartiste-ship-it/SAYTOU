@@ -26,6 +26,7 @@ enum ScopeType {
   LOCALITE
   SOUS_LOCALITE
   SECTION
+  ORG_UNIT
 }
 
 enum MembreEtat {
@@ -255,6 +256,7 @@ model OrgUnitInstance {
   assignments OrgUnitAssignment[]
   members     OrgUnitMember[]
   pv          OrgUnitPv?
+  rencontres  Rencontre[]
 
   @@index([definitionId])
   @@index([scopeType])
@@ -416,6 +418,8 @@ model TrancheAge {
 }
 
 model Rencontre {
+  orgUnitInstanceId String? @map("org_unit_instance_id")
+  orgUnitInstance OrgUnitInstance? @relation(fields: [orgUnitInstanceId], references: [id], onDelete: Restrict)
   id              String    @id @default(uuid())
   typeId          String    @map("type_id")
   sectionId       String?   @map("section_id")
@@ -453,6 +457,7 @@ model Rencontre {
   @@index([typeId])
   @@index([date])
   @@index([scopeType, scopeId])
+  @@index([orgUnitInstanceId])
   @@index([lieuMembreId])
   @@map("rencontres")
 }

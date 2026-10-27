@@ -166,7 +166,7 @@ export default function Layout() {
 
   const baseNavigation = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Mes Rencontres', href: '/mes-rencontres', icon: CalendarCheck },
+    { name: 'Mes Rencontres', href: '/mes-rencontres', icon: CalendarCheck, roles: ['OWNER', 'LOCALITE', 'COMITE_PEDAGOGIQUE', 'SOUS_LOCALITE_ADMIN', 'SECTION_USER', 'ORG_UNIT_RESP'] },
     { name: 'Historique', href: '/rencontres', icon: Calendar, roles: ['OWNER', 'LOCALITE', 'SOUS_LOCALITE_ADMIN', 'SECTION_USER', 'COMITE_PEDAGOGIQUE'] },
     { name: 'Historique sections', href: '/historique-sections', icon: Calendar, roles: ['SOUS_LOCALITE_ADMIN', 'COMITE_PEDAGOGIQUE'] },
     { name: 'Membres', href: '/membres', icon: Users, roles: ['OWNER', 'LOCALITE', 'COMITE_PEDAGOGIQUE', 'SECTION_USER'] },

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Calendar, Clock, Users, FileText, User, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
+import { rencontreOrganiser } from '../lib/rencontreOrganiser';
 import type { Rencontre } from '../lib/types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -79,7 +80,7 @@ export default function PrintRencontrePage() {
               <Badge variant={rencontre.type.isReunion ? 'default' : 'accent'}>
                 {rencontre.type.name}
               </Badge>
-              <Badge variant="secondary">{rencontre.section?.name || 'Localité'}</Badge>
+              <Badge variant="secondary">{rencontreOrganiser(rencontre)}</Badge>
             </div>
             {rencontre.theme && (
               <h2 className="text-2xl font-bold text-gray-900 mt-2">{rencontre.theme}</h2>

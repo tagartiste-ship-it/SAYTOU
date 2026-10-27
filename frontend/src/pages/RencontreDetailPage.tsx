@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Download, Calendar, Clock, Users, FileText, User, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
+import { rencontreOrganiser } from '../lib/rencontreOrganiser';
 import type { Rencontre } from '../lib/types';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -20,7 +21,7 @@ export default function RencontreDetailPage() {
   const { user } = useAuthStore();
   const [rencontre, setRencontre] = useState<Rencontre | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE';
+  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE' || user?.role === 'ORG_UNIT_RESP';
 
   useEffect(() => {
     if (id) {
@@ -128,7 +129,7 @@ export default function RencontreDetailPage() {
                 {rencontre.type.name}
               </Badge>
               <Badge variant="secondary">
-                {rencontre.section?.name || 'Localité'}
+                {rencontreOrganiser(rencontre)}
               </Badge>
             </div>
             {rencontre.theme && (

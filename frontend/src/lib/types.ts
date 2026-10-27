@@ -188,8 +188,10 @@ export interface Rencontre {
   type: RencontreType;
   sectionId: string | null;
   section: Section | null;
-  scopeType: ScopeType;
+  scopeType: ScopeType | 'ORG_UNIT';
   scopeId: string;
+  orgUnitInstanceId?: string | null;
+  orgUnitInstance?: { id: string; scopeType: 'LOCALITE' | 'SECTION'; scopeId: string; definition: { name: string; kind: 'CELLULE' | 'COMMISSION' } } | null;
   lieuMembreId?: string | null;
   lieuMembre?: Membre | null;
   lieuTexte?: string | null;

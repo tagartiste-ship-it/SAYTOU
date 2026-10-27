@@ -4,7 +4,10 @@ import { motion } from 'framer-motion';
 import { Search, Calendar, Users, Filter, Download, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
-import type { Rencontre, RencontreType, Section } from '../lib/types';
+import { useMeetingArchive } from '../hooks/useMeetingArchive';
+import { MeetingArchiveControls } from '../components/MeetingArchiveControls';
+import { rencontreOrganiser } from '../lib/rencontreOrganiser';
+import type { RencontreType, Section } from '../lib/types';
 import { useAuthStore } from '../store/authStore';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -16,65 +19,33 @@ import { Skeleton } from '../components/ui/Skeleton';
 
 export default function RencontresPage() {
   const { user } = useAuthStore();
-  const [rencontres, setRencontres] = useState<Rencontre[]>([]);
   const [types, setTypes] = useState<RencontreType[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   
   // Filtres
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
+  const [organiser, setOrganiser] = useState('');
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
 
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
   useEffect(() => {
-    fetchData();
-  }, [selectedType, selectedSection, dateDebut, dateFin, debouncedSearch]);
-
-  useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
     return () => window.clearTimeout(t);
   }, [searchTerm]);
 
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (selectedType) params.append('typeId', selectedType);
-      if (selectedSection) params.append('sectionId', selectedSection);
-      if (dateDebut) params.append('dateDebut', dateDebut);
-      if (dateFin) params.append('dateFin', dateFin);
-      if (debouncedSearch) params.append('q', debouncedSearch);
-      // Comité pédagogique: voir uniquement ses propres rencontres
-      if (user?.role === 'COMITE_PEDAGOGIQUE') params.append('mine', '1');
-
-      const [rencontresRes, typesRes, sectionsRes] = await Promise.all([
-        api.get<{ rencontres: Rencontre[] }>(`/rencontres?${params.toString()}`),
-        api.get<{ types: RencontreType[] }>('/types'),
-        api.get<{ sections: Section[] }>('/sections'),
-      ]);
-
-      setRencontres(rencontresRes.data.rencontres || []);
-      setTypes(typesRes.data.types || []);
-      setSections(sectionsRes.data.sections || []);
-    } catch (error: any) {
-      console.error('Erreur détaillée:', error);
-      const errorMsg = error.response?.data?.error || error.message || 'Erreur lors du chargement des rencontres';
-      setError(errorMsg);
-      toast.error(errorMsg);
-      // Initialiser avec des tableaux vides en cas d'erreur
-      setRencontres([]);
-      setTypes([]);
-      setSections([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+  const archive = useMeetingArchive({ typeId: selectedType, sectionId: selectedSection, dateDebut, dateFin, q: debouncedSearch, organiser });
+  const { rencontres, isLoading, error } = archive;
+  useEffect(() => {
+    Promise.all([
+      api.get<{ types: RencontreType[] }>('/types'),
+      user?.role === 'ORG_UNIT_RESP' ? Promise.resolve({ data: { sections: [] as Section[] } }) : api.get<{ sections: Section[] }>('/sections'),
+    ]).then(([typesRes, sectionsRes]) => { setTypes(typesRes.data.types || []); setSections(sectionsRes.data.sections || []); })
+      .catch(() => toast.error('Impossible de charger les filtres'));
+  }, [user?.role]);
 
   const filteredRencontres = rencontres;
 
@@ -119,7 +90,7 @@ export default function RencontresPage() {
         <div className="card p-12 text-center">
           <div className="text-red-600 text-xl mb-4">❌ Erreur</div>
           <p className="text-gray-700">{error}</p>
-          <button onClick={() => { setError(null); fetchData(); }} className="btn btn-primary mt-4">
+          <button onClick={archive.reload} className="btn btn-primary mt-4">
             Réessayer
           </button>
         </div>
@@ -147,7 +118,7 @@ export default function RencontresPage() {
         <div className="flex items-center gap-3">
           <Badge variant="default" className="text-base px-4 py-2">
             <TrendingUp className="w-4 h-4 mr-2" />
-            {filteredRencontres.length} rencontres
+            {archive.total} rencontres
           </Badge>
         </div>
       </motion.div>
@@ -203,12 +174,20 @@ export default function RencontresPage() {
               ))}
             </select>
 
+            <select aria-label="Organisateur" value={organiser} onChange={(e) => setOrganiser(e.target.value)}
+              className="h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm dark:text-gray-100">
+              <option value="">Tous les organisateurs</option>
+              <option value="CELLULE">Cellules</option>
+              <option value="COMMISSION">Commissions</option>
+            </select>
+
             {/* Bouton réinitialiser */}
             <Button
               onClick={() => {
                 setSearchTerm('');
                 setSelectedType('');
                 setSelectedSection('');
+                setOrganiser('');
                 setDateDebut('');
                 setDateFin('');
               }}
@@ -239,6 +218,8 @@ export default function RencontresPage() {
           </div>
         </Card>
       </motion.div>
+
+      <MeetingArchiveControls archive={archive} />
 
       {/* Liste des rencontres */}
       {filteredRencontres.length === 0 ? (
@@ -272,7 +253,7 @@ export default function RencontresPage() {
                           {rencontre.type.name}
                         </Badge>
                         <span className="text-gray-500 dark:text-gray-400 text-sm">
-                          {rencontre.section?.name || 'Localité'}
+                          {rencontreOrganiser(rencontre)}
                         </span>
                       </div>
 
@@ -326,38 +307,6 @@ export default function RencontresPage() {
         </motion.div>
       )}
 
-      {/* Stats */}
-      {filteredRencontres.length > 0 && (
-        <motion.div variants={itemVariants}>
-          <Card className="p-6">
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">Résumé</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total rencontres</p>
-                <p className="text-2xl font-bold text-primary">{filteredRencontres.length}</p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Présence totale</p>
-                <p className="text-2xl font-bold text-accent">
-                  {filteredRencontres.reduce((sum, r) => sum + r.presenceTotale, 0)}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Hommes</p>
-                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {filteredRencontres.reduce((sum, r) => sum + r.presenceHomme, 0)}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Femmes</p>
-                <p className="text-2xl font-bold text-pink-600 dark:text-pink-400">
-                  {filteredRencontres.reduce((sum, r) => sum + r.presenceFemme, 0)}
-                </p>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-      )}
     </motion.div>
   );
 }

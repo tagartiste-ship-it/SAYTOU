@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Trash2, Save, Users, Calendar, FileText } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,6 +13,20 @@ import { Badge } from '../components/ui/Badge';
 export default function CreateRencontrePage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const [searchParams] = useSearchParams();
+  const [orgUnitInstanceId, setOrgUnitInstanceId] = useState(searchParams.get('orgUnitInstanceId') || '');
+  const [meetingUnits, setMeetingUnits] = useState<Array<{ id: string; label: string }>>([]);
+
+  useEffect(() => {
+    if (user?.role !== 'ORG_UNIT_RESP') return;
+    api.get('/org-units/me').then(({ data }) => {
+      const units = Array.from(new Map((data.assignments || [])
+        .filter((a: any) => a.instance.isVisible && a.instance.definition.isActive)
+        .map((a: any) => [a.instance.id, { id: a.instance.id, label: `${a.instance.definition.kind === 'CELLULE' ? 'Cellule' : 'Commission'} : ${a.instance.definition.name}${a.instance.scopeName ? ` — ${a.instance.scopeName}` : ''}` }])).values()) as Array<{ id: string; label: string }>;
+      setMeetingUnits(units);
+      setOrgUnitInstanceId((current) => units.some((u) => u.id === current) ? current : units.length === 1 ? units[0].id : '');
+    }).catch(() => toast.error('Impossible de charger vos cellules et commissions'));
+  }, [user?.id, user?.role]);
 
   useEffect(() => {
     if (user?.role !== 'SECTION_USER') return;
@@ -81,7 +95,7 @@ export default function CreateRencontrePage() {
   const [membresAbsents, setMembresAbsents] = useState<string[]>([]);
 
   // Sous-localité / Localité / Comité pédagogique: saisie directe des présences H/F
-  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE';
+  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE' || user?.role === 'ORG_UNIT_RESP';
 
   const selectedType = types.find((t) => t.id === formData.typeId);
   const isReunion = Boolean(selectedType?.isReunion);
@@ -278,7 +292,7 @@ const fetchData = async () => {
 
   useEffect(() => {
     if (!hasRestoredDraft) return;
-    if (user?.role === 'SECTION_USER') return;
+    if (user?.role === 'SECTION_USER' || user?.role === 'ORG_UNIT_RESP') return;
     if (!formData.sectionId) {
       setMembres([]);
       setMembresPresents([]);
@@ -387,6 +401,10 @@ const fetchData = async () => {
       return;
     }
 
+    if (user?.role === 'ORG_UNIT_RESP' && !meetingUnits.some((u) => u.id === orgUnitInstanceId)) {
+      toast.error('Veuillez sélectionner votre cellule ou commission');
+      return;
+    }
     setIsLoading(true);
     try {
       const lieuNom = formData.lieuMembreNomLibre?.trim() || '';
@@ -397,6 +415,7 @@ const fetchData = async () => {
 
       const payload = {
         typeId: formData.typeId,
+        orgUnitInstanceId: user?.role === 'ORG_UNIT_RESP' ? orgUnitInstanceId : undefined,
         sectionId: effectiveSectionId || null,
         date: formData.date,
         heureDebut: formData.heureDebut,
@@ -419,7 +438,7 @@ const fetchData = async () => {
       await api.post('/rencontres', payload);
       toast.success('Rencontre créée avec succès');
       clearDraft();
-      navigate('/rencontres');
+      navigate(user?.role === 'ORG_UNIT_RESP' ? '/mes-rencontres' : '/rencontres');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Erreur lors de la création');
     } finally {
@@ -536,6 +555,18 @@ const fetchData = async () => {
                 placeholder="Ex: Quartier, adresse, repère..."
               />
             </div>
+
+            {user?.role === 'ORG_UNIT_RESP' && (
+              <div>
+                <label htmlFor="meeting-organiser" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cellule ou commission organisatrice *</label>
+                <select id="meeting-organiser" required value={orgUnitInstanceId} onChange={(e) => setOrgUnitInstanceId(e.target.value)}
+                  className="flex h-11 w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm dark:text-gray-100">
+                  <option value="">Sélectionner une cellule ou commission</option>
+                  {meetingUnits.map((unit) => <option key={unit.id} value={unit.id}>{unit.label}</option>)}
+                </select>
+                <p className="mt-2 text-sm text-gray-500">Le compte rendu sera visible par la localité.</p>
+              </div>
+            )}
 
             {/* Afficher le champ Section uniquement pour les admins non-groupés */}
             {user?.role !== 'SECTION_USER' && !isGroupedPresence && (
@@ -1115,7 +1146,7 @@ ${formData.moderateur || '[Nom]'}                      [Nom]`;
             type="button"
             onClick={() => {
               clearDraft();
-              navigate('/rencontres');
+              navigate(user?.role === 'ORG_UNIT_RESP' ? '/mes-rencontres' : '/rencontres');
             }}
             variant="outline"
             disabled={isLoading}

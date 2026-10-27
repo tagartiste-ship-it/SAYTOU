@@ -85,7 +85,7 @@ export default function EditRencontrePage() {
   const [membresAbsents, setMembresAbsents] = useState<string[]>([]);
 
   // Sous-localité / Localité / Comité pédagogique: saisie directe des présences H/F
-  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE';
+  const isGroupedPresence = user?.role === 'SOUS_LOCALITE_ADMIN' || user?.role === 'LOCALITE' || user?.role === 'COMITE_PEDAGOGIQUE' || user?.role === 'ORG_UNIT_RESP';
 
   const selectedType = types.find((t) => t.id === formData.typeId);
 
@@ -115,7 +115,7 @@ export default function EditRencontrePage() {
   }, [id]);
 
   useEffect(() => {
-    if (user?.role === 'SECTION_USER') return;
+    if (user?.role === 'SECTION_USER' || user?.role === 'ORG_UNIT_RESP') return;
     if (isGroupedPresence) return;
     if (!formData.sectionId) {
       setMembres([]);

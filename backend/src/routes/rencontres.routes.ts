@@ -1,5 +1,6 @@
 import express, { Response } from 'express';
 import prisma from '../utils/prisma.js';
+import { assignedMeetingUnits, canManageUnitMeeting, readableMeetingUnits } from '../utils/rencontre-org-units.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const router: any = express.Router();
@@ -96,6 +97,7 @@ router.post(
       const {
         typeId,
         sectionId,
+        orgUnitInstanceId,
         lieuMembreId,
         lieuTexte,
         date,
@@ -137,7 +139,7 @@ router.post(
       }
 
       // Déterminer le scope et la section selon le rôle
-      let scopeType: 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION';
+      let scopeType: 'LOCALITE' | 'SOUS_LOCALITE' | 'SECTION' | 'ORG_UNIT';
       let scopeId: string;
       let finalSectionId = sectionId;
 
@@ -151,7 +153,18 @@ router.post(
         return;
       }
 
-      if (role === 'SECTION_USER') {
+      if (role === 'ORG_UNIT_RESP') {
+        if (typeof orgUnitInstanceId !== 'string' || !(await assignedMeetingUnits(userId)).includes(orgUnitInstanceId)) {
+          res.status(403).json({ error: 'Choisissez une cellule ou commission active qui vous est affectée' });
+          return;
+        }
+        scopeType = 'ORG_UNIT';
+        scopeId = orgUnitInstanceId;
+        finalSectionId = null;
+      } else if (orgUnitInstanceId) {
+        res.status(403).json({ error: 'Seul un responsable affecté peut créer les rencontres de cette institution' });
+        return;
+      } else if (role === 'SECTION_USER') {
         if (!user.sectionId) {
           res.status(400).json({ error: 'Votre compte n\'est pas associé à une section' });
           return;
@@ -217,7 +230,8 @@ router.post(
           sectionId: finalSectionId,
           scopeType,
           scopeId,
-          lieuMembreId: lieuMembreId || null,
+          orgUnitInstanceId: role === 'ORG_UNIT_RESP' ? orgUnitInstanceId : null,
+          lieuMembreId: role === 'ORG_UNIT_RESP' ? null : (lieuMembreId || null),
           lieuTexte: lieuTexte || null,
           date: new Date(date),
           heureDebut,
@@ -228,7 +242,7 @@ router.post(
           developpement: typeof developpement === 'string' && developpement.trim() ? developpement : null,
           pvReunion: typeof pvReunion === 'string' && pvReunion.trim() ? pvReunion : null,
           ordreDuJour: type.isReunion ? ordreDuJour : null,
-          membresPresents: Array.isArray(membresPresents) ? membresPresents : null,
+          membresPresents: role === 'ORG_UNIT_RESP' ? [] : (Array.isArray(membresPresents) ? membresPresents : null),
           presenceHomme: presH,
           presenceFemme: presF,
           presenceTotale,
@@ -238,6 +252,7 @@ router.post(
           updatedById: userId,
         },
         include: {
+          orgUnitInstance: { include: { definition: true } },
           type: true,
           lieuMembre: true,
           section: {
@@ -255,7 +270,7 @@ router.post(
         },
       });
 
-      await updateMemberPresenceStats({
+      if (role !== 'ORG_UNIT_RESP') await updateMemberPresenceStats({
         sectionId: finalSectionId,
         typeId,
         date: new Date(date),
@@ -347,6 +362,7 @@ router.get(
       const rencontres = await prisma.rencontre.findMany({
         where: whereAnd.length ? { AND: whereAnd } : {},
         include: {
+          orgUnitInstance: { include: { definition: true } },
           type: true,
           lieuMembre: {
             select: {
@@ -363,7 +379,6 @@ router.get(
           },
         },
         orderBy: [{ sectionId: 'asc' }, { date: 'desc' }, { createdAt: 'desc' }],
-        take: 5000,
       });
 
       const bySectionId = new Map<string, { sectionId: string; sectionName: string; total: number; rencontres: any[] }>();
@@ -404,10 +419,14 @@ router.get(
   async (req: AuthRequest, res: Response): Promise<void> => {
     try {
       const { userId, role } = req.user!;
-      const { typeId, sectionId, dateDebut, dateFin, q, mine, page = '1', limit = '20' } = req.query;
+      const { typeId, sectionId, dateDebut, dateFin, q, mine, organiser, orgUnitInstanceId, archive, month, sectionsOnly, page = '1', limit = '20' } = req.query;
 
-      const pageNum = parseInt(page as string, 10);
-      const limitNum = parseInt(limit as string, 10);
+      if (!['OWNER', 'LOCALITE', 'COMITE_PEDAGOGIQUE', 'SOUS_LOCALITE_ADMIN', 'SECTION_USER', 'ORG_UNIT_RESP'].includes(role)) {
+        res.status(403).json({ error: 'Accès non autorisé' });
+        return;
+      }
+      const pageNum = Math.max(1, Number.parseInt(String(page), 10) || 1);
+      const limitNum = Math.min(100, Math.max(1, Number.parseInt(String(limit), 10) || 20));
       const skip = (pageNum - 1) * limitNum;
 
       const whereClauses: any[] = [];
@@ -490,6 +509,40 @@ router.get(
         }
       }
 
+      const unitIds = await readableMeetingUnits(userId, role);
+      if (role === 'ORG_UNIT_RESP') {
+        where.scopeType = 'ORG_UNIT';
+        where.orgUnitInstanceId = { in: unitIds ?? [] };
+      } else if (unitIds !== null) {
+        whereClauses.push({ OR: [{ orgUnitInstanceId: null }, { orgUnitInstanceId: { in: unitIds } }] });
+      }
+      if (orgUnitInstanceId) whereClauses.push({ orgUnitInstanceId: String(orgUnitInstanceId) });
+      if (organiser === 'CELLULE' || organiser === 'COMMISSION') {
+        whereClauses.push({ orgUnitInstance: { definition: { kind: organiser } } });
+      }
+
+      if (sectionsOnly === '1') {
+        const actor = await prisma.user.findUnique({ where: { id: userId }, select: { localiteId: true, sectionId: true, sousLocaliteId: true } });
+        let sectionScope: any;
+        if (role === 'OWNER') sectionScope = {};
+        else if (role === 'SECTION_USER' && actor?.sectionId) sectionScope = { id: actor.sectionId };
+        else if (role === 'SOUS_LOCALITE_ADMIN' && actor?.sousLocaliteId) sectionScope = { sousLocaliteId: actor.sousLocaliteId };
+        else if (['LOCALITE', 'COMITE_PEDAGOGIQUE'].includes(role) && actor?.localiteId) sectionScope = { sousLocalite: { localiteId: actor.localiteId } };
+        else { res.status(403).json({ error: 'Accès non autorisé aux sections' }); return; }
+        const sections = await prisma.section.findMany({ where: sectionScope, select: { id: true } });
+        whereClauses.push({ sectionId: { in: sections.map((s) => s.id) } });
+      }
+      if (month) {
+        const value = String(month);
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) {
+          res.status(400).json({ error: 'Mois invalide (AAAA-MM attendu)' }); return;
+        }
+        const start = new Date(`${value}-01T00:00:00.000Z`);
+        const end = new Date(start);
+        end.setUTCMonth(end.getUTCMonth() + 1);
+        whereClauses.push({ date: { gte: start, lt: end } });
+      }
+
       // mine=1 : uniquement les rencontres créées par l'utilisateur
       if (mine === '1' || mine === 'true') {
         where.createdById = userId;
@@ -499,6 +552,29 @@ router.get(
 
       const finalWhere = whereClauses.length > 1 ? { AND: whereClauses } : (whereClauses[0] || {});
 
+      if (archive === '1') {
+        // Aggregate dates rather than loading every historical meeting into memory.
+        const days = await prisma.rencontre.groupBy({
+          by: ['date'], where: finalWhere,
+          _count: { _all: true },
+          _sum: { presenceHomme: true, presenceFemme: true, presenceTotale: true },
+          orderBy: { date: 'desc' },
+        });
+        const byMonth = new Map<string, { month: string; total: number; hommes: number; femmes: number; presences: number }>();
+        for (const day of days) {
+          const key = day.date.toISOString().slice(0, 7);
+          const row = byMonth.get(key) ?? { month: key, total: 0, hommes: 0, femmes: 0, presences: 0 };
+          row.total += day._count._all;
+          row.hommes += day._sum.presenceHomme ?? 0;
+          row.femmes += day._sum.presenceFemme ?? 0;
+          row.presences += day._sum.presenceTotale ?? 0;
+          byMonth.set(key, row);
+        }
+        const months = [...byMonth.values()].sort((a, b) => b.month.localeCompare(a.month));
+        res.json({ months, total: months.reduce((sum, m) => sum + m.total, 0) });
+        return;
+      }
+
       // Compter le total
       const total = await prisma.rencontre.count({ where: finalWhere });
 
@@ -506,6 +582,7 @@ router.get(
       const rencontres = await prisma.rencontre.findMany({
         where: finalWhere,
         include: {
+          orgUnitInstance: { include: { definition: true } },
           type: true,
           lieuMembre: {
             select: {
@@ -527,7 +604,7 @@ router.get(
             },
           },
         },
-        orderBy: { date: 'desc' },
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limitNum,
       });
@@ -568,6 +645,7 @@ router.get(
       const rencontre = await prisma.rencontre.findUnique({
         where: { id },
         include: {
+          orgUnitInstance: { include: { definition: true } },
           type: true,
           lieuMembre: {
             select: {
@@ -604,7 +682,13 @@ router.get(
       }
 
       // Vérifier les permissions
-      if (role === 'SECTION_USER') {
+      if (rencontre.scopeType === 'ORG_UNIT' || role === 'ORG_UNIT_RESP') {
+        const ids = await readableMeetingUnits(userId, role);
+        if (rencontre.scopeType !== 'ORG_UNIT' || !rencontre.orgUnitInstanceId || (ids !== null && !ids.includes(rencontre.orgUnitInstanceId))) {
+          res.status(403).json({ error: 'Accès non autorisé' });
+          return;
+        }
+      } else if (role === 'SECTION_USER') {
         const user = await prisma.user.findUnique({
           where: { id: userId },
           select: { sectionId: true },
@@ -660,6 +744,7 @@ router.put(
               sousLocalite: true,
             },
           },
+          orgUnitInstance: { include: { definition: true } },
           type: true,
         },
       });
@@ -685,6 +770,16 @@ router.put(
           error: 'RENCONTRE_LOCKED',
           message: 'Cette rencontre ne peut plus être modifiée après 24h',
         });
+        return;
+      }
+
+      if (role === 'ORG_UNIT_RESP' || existingRencontre.scopeType === 'ORG_UNIT') {
+        if (role !== 'ORG_UNIT_RESP' || !(await canManageUnitMeeting(userId, existingRencontre))) {
+          res.status(403).json({ error: 'Seul un responsable affecté peut modifier cette rencontre interne' });
+          return;
+        }
+      } else if (!['OWNER', 'LOCALITE', 'COMITE_PEDAGOGIQUE', 'SECTION_USER', 'SOUS_LOCALITE_ADMIN'].includes(role)) {
+        res.status(403).json({ error: 'Accès non autorisé' });
         return;
       }
 
@@ -758,17 +853,18 @@ router.put(
           pvReunion:
             pvReunion !== undefined ? (typeof pvReunion === 'string' && pvReunion.trim() ? pvReunion : null) : undefined,
           ordreDuJour: existingRencontre.type.isReunion ? (ordreDuJour !== undefined ? ordreDuJour : undefined) : null,
-          membresPresents: membresPresents !== undefined ? (Array.isArray(membresPresents) ? membresPresents : null) : undefined,
+          membresPresents: role === 'ORG_UNIT_RESP' ? [] : (membresPresents !== undefined ? (Array.isArray(membresPresents) ? membresPresents : null) : undefined),
           presenceHomme: presH,
           presenceFemme: presF,
           presenceTotale,
           observations: observations !== undefined ? observations : undefined,
           attachments: attachments !== undefined ? attachments : undefined,
-          lieuMembreId: lieuMembreId !== undefined ? (lieuMembreId || null) : undefined,
+          lieuMembreId: role === 'ORG_UNIT_RESP' ? null : (lieuMembreId !== undefined ? (lieuMembreId || null) : undefined),
           lieuTexte: lieuTexte !== undefined ? (lieuTexte || null) : undefined,
           updatedById: userId,
         },
         include: {
+          orgUnitInstance: { include: { definition: true } },
           type: true,
           lieuMembre: true,
           section: {
@@ -795,7 +891,7 @@ router.put(
 
       const finalDate = date ? new Date(date) : existingRencontre.date;
       const finalMembresPresents = membresPresents !== undefined ? membresPresents : existingRencontre.membresPresents;
-      await updateMemberPresenceStats({
+      if (role !== 'ORG_UNIT_RESP') await updateMemberPresenceStats({
         sectionId: existingRencontre.sectionId ?? null,
         typeId: String(existingRencontre.typeId),
         date: finalDate,
@@ -863,6 +959,16 @@ router.delete(
           error: 'RENCONTRE_LOCKED',
           message: 'Cette rencontre ne peut plus être supprimée après 24h',
         });
+        return;
+      }
+
+      if (role === 'ORG_UNIT_RESP' || rencontre.scopeType === 'ORG_UNIT') {
+        if (role !== 'ORG_UNIT_RESP' || !(await canManageUnitMeeting(userId, rencontre))) {
+          res.status(403).json({ error: 'Seul un responsable affecté peut supprimer cette rencontre interne' });
+          return;
+        }
+      } else if (!['OWNER', 'LOCALITE', 'COMITE_PEDAGOGIQUE', 'SECTION_USER', 'SOUS_LOCALITE_ADMIN'].includes(role)) {
+        res.status(403).json({ error: 'Accès non autorisé' });
         return;
       }
 

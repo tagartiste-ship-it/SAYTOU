@@ -509,6 +509,11 @@ export default function MonInstitutionPage() {
                         </div>
 
                         <div className="flex flex-wrap gap-2">
+                          {user?.role === 'ORG_UNIT_RESP' && <>
+                            <Link to={`/rencontres/new?orgUnitInstanceId=${encodeURIComponent(a.instance.id)}`}><Button>Créer une rencontre</Button></Link>
+                            <Link to={`/mes-rencontres?orgUnitInstanceId=${encodeURIComponent(a.instance.id)}`}><Button variant="outline">Rencontres</Button></Link>
+                          </>}
+
                           <Button
                             variant={isActive && activeTab === 'bureau' ? 'primary' : 'outline'}
                             onClick={() => setActive({ assignmentId: a.id, tab: 'bureau' })}

@@ -13,7 +13,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx src/prisma/seed.ts",
     "prisma:studio": "prisma studio",
-    "test": "jest"
+    "test": "jest",
+    "test:org-unit-rencontres": "npm run build && node --test tests/org-unit-rencontres.test.mjs"
   },
   "prisma": {
     "seed": "tsx src/prisma/seed.ts"

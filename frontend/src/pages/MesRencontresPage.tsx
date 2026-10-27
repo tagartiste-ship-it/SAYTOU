@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Plus, Pencil, Trash2, FileText, Calendar, Users, Clock, Filter, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../lib/api';
+import { useMeetingArchive } from '../hooks/useMeetingArchive';
+import { MeetingArchiveControls } from '../components/MeetingArchiveControls';
+import { rencontreOrganiser } from '../lib/rencontreOrganiser';
 import type { Rencontre } from '../lib/types';
 import { useAuthStore } from '../store/authStore';
 import { Card } from '../components/ui/Card';
@@ -14,11 +17,10 @@ import { Skeleton } from '../components/ui/Skeleton';
 
 export default function MesRencontresPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const orgUnitInstanceId = searchParams.get('orgUnitInstanceId') || '';
   const { user } = useAuthStore();
   
-  const [rencontres, setRencontres] = useState<Rencontre[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -31,40 +33,12 @@ export default function MesRencontresPage() {
   });
 
   useEffect(() => {
-    fetchRencontres();
-  }, [filters, debouncedSearch]);
-
-  useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400);
     return () => window.clearTimeout(t);
   }, [searchTerm]);
 
-  const fetchRencontres = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      const params = new URLSearchParams();
-      if (filters.typeId) params.append('typeId', filters.typeId);
-      if (filters.dateDebut) params.append('dateDebut', filters.dateDebut);
-      if (filters.dateFin) params.append('dateFin', filters.dateFin);
-      if (debouncedSearch) params.append('q', debouncedSearch);
-      // Comité pédagogique: voir uniquement ses propres rencontres
-      if (user?.role === 'COMITE_PEDAGOGIQUE') params.append('mine', '1');
-      params.append('limit', '100');
-
-      const response = await api.get<{ rencontres: Rencontre[] }>(`/rencontres?${params.toString()}`);
-      setRencontres(response.data.rencontres || []);
-    } catch (error: any) {
-      console.error('Erreur détaillée:', error);
-      const errorMsg = error.response?.data?.error || error.message || 'Erreur lors du chargement';
-      setError(errorMsg);
-      toast.error(errorMsg);
-      setRencontres([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const archive = useMeetingArchive({ ...filters, q: debouncedSearch, orgUnitInstanceId, mine: user?.role === 'COMITE_PEDAGOGIQUE' ? '1' : '' });
+  const { rencontres, isLoading, error } = archive;
 
   const handleDelete = async (id: string) => {
     if (!confirm('Êtes-vous sûr de vouloir supprimer cette rencontre ?')) return;
@@ -72,7 +46,7 @@ export default function MesRencontresPage() {
     try {
       await api.delete(`/rencontres/${id}`);
       toast.success('Rencontre supprimée avec succès');
-      fetchRencontres();
+      archive.reload();
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Erreur lors de la suppression');
     }
@@ -91,6 +65,8 @@ export default function MesRencontresPage() {
     const createdAtMs = new Date(rencontre.createdAt).getTime();
     const within24h = Date.now() - createdAtMs <= 24 * 60 * 60 * 1000;
     if (!within24h) return false;
+
+    if (user?.role === 'ORG_UNIT_RESP') return rencontre.scopeType === 'ORG_UNIT';
 
     // L'utilisateur peut modifier uniquement ses propres rencontres
     if (user?.role === 'SECTION_USER') {
@@ -144,7 +120,7 @@ export default function MesRencontresPage() {
         <div className="card p-12 text-center">
           <div className="text-red-600 text-xl mb-4">❌ Erreur</div>
           <p className="text-gray-700 mb-4">{error}</p>
-          <button onClick={() => { setError(null); setIsLoading(true); fetchRencontres(); }} className="btn btn-primary">
+          <button onClick={archive.reload} className="btn btn-primary">
             Réessayer
           </button>
         </div>
@@ -171,7 +147,7 @@ export default function MesRencontresPage() {
           </p>
         </div>
         <Button
-          onClick={() => navigate('/rencontres/new')}
+          onClick={() => navigate(orgUnitInstanceId ? `/rencontres/new?orgUnitInstanceId=${encodeURIComponent(orgUnitInstanceId)}` : '/rencontres/new')}
           className="inline-flex items-center gap-2"
         >
           <Plus className="w-5 h-5" />
@@ -232,6 +208,8 @@ export default function MesRencontresPage() {
         </Card>
       </motion.div>
 
+      <MeetingArchiveControls archive={archive} />
+
       {/* Liste des rencontres */}
       {rencontres.length === 0 ? (
         <motion.div variants={itemVariants}>
@@ -239,7 +217,7 @@ export default function MesRencontresPage() {
             <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Aucune rencontre</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-4">Commencez par créer votre première rencontre</p>
-            <Button onClick={() => navigate('/rencontres/new')}>
+            <Button onClick={() => navigate(orgUnitInstanceId ? `/rencontres/new?orgUnitInstanceId=${encodeURIComponent(orgUnitInstanceId)}` : '/rencontres/new')}>
               Créer une rencontre
             </Button>
           </Card>
@@ -262,7 +240,7 @@ export default function MesRencontresPage() {
                     </div>
                     <div>
                       <h3 className="font-semibold text-lg text-gray-900 dark:text-gray-100">{rencontre.type.name}</h3>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{rencontre.section?.name || 'Localité'}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">{rencontreOrganiser(rencontre)}</p>
                     </div>
                     {!canModify(rencontre) && (
                       <Badge variant="secondary">Lecture seule</Badge>
